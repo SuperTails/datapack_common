@@ -60,8 +60,32 @@ impl CommandParser<'_> {
         })
     }
 
+    pub fn parse_target(&mut self) -> CmdParseResult<Target> {
+        Ok(self.next_word()?.parse().expect("TODO:"))
+    }
+
+    pub fn parse_objective(&mut self) -> CmdParseResult<Objective> {
+        Ok(self.next_word()?.to_owned().try_into().expect("TODO:"))
+    }
+
+    pub fn parse_obj_criterion(&mut self) -> CmdParseResult<ObjectiveCriterion> {
+        Ok(self.next_word()?.to_owned().parse().expect("TODO:"))
+    }
+
+    pub fn parse_i32(&mut self) -> CmdParseResult<i32> {
+        Ok(self.next_word()?.parse::<i32>().expect("TODO:"))
+    }
+
+    pub fn parse_f32(&mut self) -> CmdParseResult<f32> {
+        Ok(self.next_word()?.parse::<f32>().expect("TODO:"))
+    }
+
+    pub fn parse_nbt_path(&mut self) -> CmdParseResult<NbtPath> {
+        Ok(self.next_word()?.to_owned())
+    }
+
     pub fn parse_kill(&mut self) -> CmdParseResult<Command> {
-        let sel = self.next_word()?.parse().expect("TODO:");
+        let sel = self.parse_target()?;
 
         Ok(Kill(sel).into())
     }
@@ -169,7 +193,7 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_teleport(&mut self) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
+        let target = self.parse_target()?;
         let pos = self.parse_rel_pos()?;
         Ok(Teleport { target, pos }.into())
     }
@@ -202,12 +226,12 @@ impl CommandParser<'_> {
 
         let kind = match kind_word.as_str() {
             "get" => {
-                let path = self.next_word()?.to_owned();
-                let scale = self.next_word()?.parse::<f32>().unwrap();
+                let path = self.parse_nbt_path()?;
+                let scale = self.parse_f32()?;
                 DataKind::Get { path, scale }
             }
             "modify" => {
-                let path = self.next_word()?.to_owned();
+                let path = self.parse_nbt_path()?;
                 let modkind = self.next_word()?.parse::<DataModifyKind>().unwrap();
                 let modsource = self.parse_modify_source()?;
                 DataKind::Modify { path, kind: modkind, source: modsource }
@@ -219,7 +243,7 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_tellraw(&mut self) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
+        let target = self.parse_target()?;
         let message = serde_json::from_str(self.tail).expect("TODO:");
 
         Ok(Tellraw { target, message }.into())
@@ -254,10 +278,10 @@ impl CommandParser<'_> {
                 cond: self.parse_execute_cond()?,
             }),
             "at" => Ok(ExecuteSubCmd::At {
-                target: self.next_word()?.parse().expect("TODO:"),
+                target: self.parse_target()?,
             }),
             "as" => Ok(ExecuteSubCmd::As {
-                target: self.next_word()?.parse().expect("TODO:"),
+                target: self.parse_target()?,
             }),
             "store" => self.parse_execute_store(),
             nw => todo!("{:?}", nw),
@@ -274,16 +298,16 @@ impl CommandParser<'_> {
         let kind = match self.peek_word() {
             Some("score") => {
                 self.next_word().unwrap();
-                let target = self.next_word()?.parse().expect("TODO:");
-                let objective = self.next_word()?.to_owned().try_into().expect("TODO:");
+                let target = self.parse_target()?;
+                let objective = self.parse_objective()?;
 
                 ExecuteStoreKind::Score { target, objective }
             }
             _ => {
                 let target = self.parse_data_target()?;
-                let path = self.next_word()?.to_owned();
+                let path = self.parse_nbt_path()?;
                 let ty = self.next_word()?.to_owned();
-                let scale = self.next_word()?.parse().expect("TODO:");
+                let scale = self.parse_f32()?;
 
                 ExecuteStoreKind::Data {
                     target,
@@ -313,7 +337,7 @@ impl CommandParser<'_> {
         match self.next_word()? {
             "block" => Ok(DataTarget::Block(self.parse_rel_pos()?)),
             "entity" => {
-                let target = self.next_word()?.parse().expect("TODO:");
+                let target = self.parse_target()?;
 
                 Ok(DataTarget::Entity(target))
             }
@@ -324,16 +348,16 @@ impl CommandParser<'_> {
     pub fn parse_execute_cond(&mut self) -> CmdParseResult<ExecuteCondition> {
         match self.next_word()? {
             "score" => {
-                let target = self.next_word()?.parse().expect("TODO:");
-                let target_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+                let target = self.parse_target()?;
+                let target_obj = self.parse_objective()?;
                 let kind = match self.next_word()? {
                     "matches" => {
                         ExecuteCondKind::Matches(self.next_word()?.parse().expect("TODO:"))
                     }
                     s => {
                         let relation = s.parse().expect("TODO:");
-                        let source = self.next_word()?.parse().expect("TODO:");
-                        let source_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+                        let source = self.parse_target()?;
+                        let source_obj = self.parse_objective()?;
                         ExecuteCondKind::Relation {
                             relation,
                             source,
@@ -363,11 +387,11 @@ impl CommandParser<'_> {
     pub fn parse_objectives(&mut self) -> CmdParseResult<Command> {
         match self.next_word()? {
             "add" => {
-                let obj = self.next_word()?.to_owned().try_into().expect("TODO:");
-                let criteria = self.next_word()?.to_owned().parse().expect("TODO:");
+                let obj = self.parse_objective()?;
+                let criteria = self.parse_obj_criterion()?;
                 Ok(ObjAdd { obj, criteria }.into())
             }
-            "remove" => Ok(ObjRemove(self.next_word()?.to_owned().try_into().expect("TODO:")).into()),
+            "remove" => Ok(ObjRemove(self.parse_objective()?).into()),
             nw => todo!("{:?}", nw),
         }
     }
@@ -384,17 +408,16 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_scoreboard_get(&mut self) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
-        let target_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+        let target = self.parse_target()?;
+        let target_obj = self.parse_objective()?;
         Ok(ScoreGet { target, target_obj }.into())
     }
 
     pub fn parse_scoreboard_set(&mut self) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
-        let target_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+        let target = self.parse_target()?;
+        let target_obj = self.parse_objective()?;
 
-        let score = self.next_word()?;
-        let score = score.parse::<i32>().unwrap_or_else(|e| panic!("TODO: {:?} {}", e, score));
+        let score = self.parse_i32()?;
 
         Ok(ScoreSet {
             target,
@@ -405,9 +428,9 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_scoreboard_add(&mut self, is_remove: bool) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
-        let target_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
-        let score = self.next_word()?.parse::<i32>().unwrap();
+        let target = self.parse_target()?;
+        let target_obj = self.parse_objective()?;
+        let score = self.parse_i32()?;
         let score = if is_remove { -score } else { score };
         Ok(ScoreAdd {
             target,
@@ -418,11 +441,11 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_operation(&mut self) -> CmdParseResult<Command> {
-        let target = self.next_word()?.parse().expect("TODO:");
-        let target_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+        let target = self.parse_target()?;
+        let target_obj = self.parse_objective()?;
         let kind = self.next_word()?.parse().expect("TODO:");
-        let source = self.next_word()?.parse().expect("TODO:");
-        let source_obj = self.next_word()?.to_owned().try_into().expect("TODO:");
+        let source = self.parse_target()?;
+        let source_obj = self.parse_objective()?;
         Ok(ScoreOp {
             target,
             target_obj,

@@ -278,7 +278,7 @@ impl FromStr for ScoreboardComparison {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "==" => Ok(ScoreboardComparison::Equal),
+            "=" => Ok(ScoreboardComparison::Equal),
             "<" => Ok(ScoreboardComparison::Less),
             ">" => Ok(ScoreboardComparison::Greater),
             "<=" => Ok(ScoreboardComparison::LessOrEqual),
@@ -291,7 +291,7 @@ impl FromStr for ScoreboardComparison {
 impl Display for ScoreboardComparison {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ScoreboardComparison::Equal => write!(f, "=="),
+            ScoreboardComparison::Equal => write!(f, "="),
             ScoreboardComparison::Less => write!(f, "<"),
             ScoreboardComparison::LessOrEqual => write!(f, "<="),
             ScoreboardComparison::Greater => write!(f, ">"),
