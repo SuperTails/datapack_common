@@ -5,6 +5,13 @@ pub mod raw_text;
 
 pub use command::Command;
 
+/// Represents a single function and its contents in a datapack
+#[derive(Debug, Clone)]
+struct Function {
+    pub id: FunctionIdent,
+    pub cmds: Vec<Command>,
+}
+
 // TODO: This needs checks on deserialization
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, serde::Serialize, serde::Deserialize)]
 /// Represents the name of a "player" on the scoreboard
@@ -36,13 +43,19 @@ pub enum ObjectiveCriterion {
     // Other(String),
 }
 
-/// A unique minecraft function identifier
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionIdent {
-    /// The namespace of this function, for example `debris`
-    pub namespace: Rc<str>,
     /// The path of this function, for example `foo/bar/baz`
     pub path: String,
+    /// The namespace of this function, for example `debris`
+    pub namespace: Rc<str>,
+}
+
+/// A unique minecraft function identifier
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionSpec {
+    /// The path and namespace for this function
+    pub id: FunctionIdent,
     /// Whether this function is a collection, marked by a `#`
     pub is_collection: bool,
 }
@@ -191,12 +204,28 @@ impl Display for ObjectiveCriterion {
 
 impl Display for FunctionIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.namespace, self.path)
+    }
+}
+
+impl Display for FunctionSpec {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "{}{}:{}",
+            "{}{}",
             if self.is_collection { "#" } else { "" },
-            self.namespace,
-            self.path
+            self.id,
         ))
+    }
+}
+
+impl MinecraftRange {
+    pub fn contains(self, value: i32) -> bool {
+        match self {
+            MinecraftRange::Range { from, to } => (from..=to).contains(&value),
+            MinecraftRange::Minimum(from) => from <= value,
+            MinecraftRange::Maximum(to) => value <= to,
+            MinecraftRange::Equal(v) => value == v,
+        }
     }
 }
 
@@ -296,7 +325,7 @@ impl ScoreboardComparison {
     }
 }
 
-impl FromStr for FunctionIdent {
+impl FromStr for FunctionSpec {
     type Err = String;
 
     fn from_str(old_s: &str) -> Result<Self, Self::Err> {
@@ -309,12 +338,22 @@ impl FromStr for FunctionIdent {
             false
         };
 
-        let (namespace, path) = s.split_once(':').ok_or_else(|| old_s.to_string())?;
+        let id = s.parse()?;
+
+        Ok(FunctionSpec { id, is_collection })
+    }
+}
+
+impl FromStr for FunctionIdent {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (namespace, path) = s.split_once(':').ok_or_else(|| s.to_string())?;
 
         // TODO: Verify namespace and path
         let namespace = namespace.into();
         let path = path.to_owned();
 
-        Ok(FunctionIdent { namespace, path, is_collection })
+        Ok(FunctionIdent { path, namespace })
     }
 }
