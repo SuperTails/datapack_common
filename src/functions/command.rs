@@ -457,6 +457,14 @@ impl CommandParser<'_> {
     }
 }
 
+impl fmt::Display for CommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CommandParseError::UnexpectedEof => write!(f, "unexpected eof"),
+        }
+    }
+}
+
 impl FromStr for Command {
     type Err = CommandParseError;
 
