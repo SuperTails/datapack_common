@@ -7,7 +7,7 @@ pub use command::Command;
 
 /// Represents a single function and its contents in a datapack
 #[derive(Debug, Clone)]
-struct Function {
+pub struct Function {
     pub id: FunctionIdent,
     pub cmds: Vec<Command>,
 }
