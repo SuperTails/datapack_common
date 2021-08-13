@@ -1631,3 +1631,141 @@ impl fmt::Display for ExecuteStoreKind {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::functions::Command;
+
+    fn roundtrip_command(val: &str) {
+        let command: Command = val.parse().unwrap();
+        let command_as_str = command.to_string();
+        assert_eq!(val, command_as_str)
+    }
+
+    #[test]
+    fn test_clone() {
+        roundtrip_command("clone 0 0 0 1 1 1 2 2 2");
+    }
+
+    #[test]
+    fn test_comment() {
+        roundtrip_command("# This is a comment and not actually a command");
+    }
+
+    #[test]
+    fn test_data() {
+        roundtrip_command("data get block 0 0 0 foo.bar.baz");
+        roundtrip_command("data get entity @s foo.bar.baz 0.00115");
+        roundtrip_command("data modify block 0 0 0 foo.bar.baz set value 90");
+    }
+
+    #[test]
+    fn test_gamerule() {
+        roundtrip_command("gamerule foo");
+        roundtrip_command("gamerule foo bar");
+    }
+
+    #[test]
+    fn test_execute() {
+        roundtrip_command("execute run kill @e");
+        roundtrip_command("execute if score source source_objective matches 0..10 run kill @e");
+        roundtrip_command("execute as @a");
+    }
+
+    #[test]
+    fn test_function_call() {
+        roundtrip_command("function hello:world");
+    }
+
+    #[test]
+    fn test_fill() {
+        roundtrip_command("fill 0 0 0 1 1 1 block");
+        roundtrip_command("fill ~ ~ ~ ~ ~ ~ block[facing=east]");
+    }
+
+    #[test]
+    fn test_kill() {
+        roundtrip_command("kill @e");
+        roundtrip_command("kill player");
+    }
+
+    #[test]
+    fn test_obj_remove() {
+        roundtrip_command("scoreboard objectives remove my_scoreboard");
+    }
+
+    #[test]
+    fn test_obj_add() {
+        roundtrip_command("scoreboard objectives add my_scoreboard 1");
+    }
+
+    #[test]
+    fn test_score_add() {
+        roundtrip_command("scoreboard players add target target_objective 100");
+        roundtrip_command("scoreboard players remove target target_objective 100");
+    }
+
+    #[test]
+    fn test_score_get() {
+        roundtrip_command("scoreboard players get source source_objective");
+    }
+
+    #[test]
+    fn test_score_op() {
+        roundtrip_command(
+            "scoreboard players operation target target_objective += source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective *= source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective -= source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective /= source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective %= source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective = source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective < source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective > source source_objective",
+        );
+        roundtrip_command(
+            "scoreboard players operation target target_objective >< source source_objective",
+        );
+    }
+
+    #[test]
+    fn test_score_set() {
+        roundtrip_command("scoreboard players set source source_objective 0");
+    }
+
+    #[test]
+    fn test_setblock() {
+        roundtrip_command("setblock 0 0 0 block");
+        roundtrip_command("setblock 0 0 0 block destroy");
+        roundtrip_command("setblock 0 0 0 block keep");
+        roundtrip_command("setblock 0 0 0 block replace");
+    }
+
+    #[test]
+    fn test_summon() {
+        roundtrip_command("summon entity 0 0 0 {\"data\":\"value\"}");
+    }
+
+    #[test]
+    fn test_teleport() {
+        roundtrip_command("tp @s 0 0 0");
+    }
+
+    #[test]
+    fn test_tellraw() {
+        roundtrip_command(r#"tellraw @a {"text": "Hello"}"#);
+    }
+}
