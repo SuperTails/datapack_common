@@ -1,4 +1,10 @@
-use std::{borrow::Borrow, convert::TryFrom, fmt::{self, Display, Formatter}, rc::Rc, str::FromStr};
+use std::{
+    borrow::Borrow,
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+    rc::Rc,
+    str::FromStr,
+};
 use vfs::{Directory, File};
 
 pub mod command;
@@ -14,13 +20,16 @@ pub struct Function {
 }
 
 // TODO: This needs checks on deserialization
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, serde::Serialize, serde::Deserialize,
+)]
 /// Represents the name of a "player" on the scoreboard
 pub struct ScoreHolder(String);
 
-
 // TODO: This needs checks on deserialization
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 /// The name of an objective on the scoreboard
 pub struct Objective(String);
 
@@ -30,8 +39,6 @@ impl Objective {
         Ok(Objective(s))
     }
 }
-
-
 
 /// Any objective criterion
 ///
@@ -253,7 +260,7 @@ impl FromStr for MinecraftRange {
                 (Some(l), Some(r)) => Ok(MinecraftRange::Range { from: l, to: r }),
                 (Some(l), None) => Ok(MinecraftRange::Minimum(l)),
                 (None, Some(r)) => Ok(MinecraftRange::Maximum(r)),
-                (None, None) => Err(s.to_string())
+                (None, None) => Err(s.to_string()),
             }
         } else {
             let val = s.parse::<i32>().map_err(|_| s.to_string())?;
@@ -269,7 +276,7 @@ impl Display for MinecraftRange {
             MinecraftRange::Range { from, to } => write!(f, "{}..{}", from, to),
             MinecraftRange::Minimum(lo) => write!(f, "{}..", lo),
             MinecraftRange::Maximum(hi) => write!(f, "..{}", hi),
-            MinecraftRange::Equal(x) => write!(f, "{}", x)
+            MinecraftRange::Equal(x) => write!(f, "{}", x),
         }
     }
 }
@@ -284,7 +291,7 @@ impl FromStr for ScoreboardComparison {
             ">" => Ok(ScoreboardComparison::Greater),
             "<=" => Ok(ScoreboardComparison::LessOrEqual),
             ">=" => Ok(ScoreboardComparison::GreaterOrEqual),
-            _ => Err(s.to_string())
+            _ => Err(s.to_string()),
         }
     }
 }
@@ -361,29 +368,34 @@ impl FromStr for FunctionIdent {
 
 /// Parses the contents of a `.mcfunction` file into a strongly-typed form
 pub fn parse_function_body(contents: &str) -> Result<Vec<Command>, String> {
-	contents.lines()
-		.map(|l| l.trim())
-		.filter(|l| !l.is_empty())
-		.map(|l| {
-            l.parse::<Command>().map_err(|e| {
-                format!("error when parsing `{}`: {}", l, e)
-            })
-		}).collect::<Result<Vec<_>, String>>()
+    contents
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            l.parse::<Command>()
+                .map_err(|e| format!("error when parsing `{}`: {}", l, e))
+        })
+        .collect::<Result<Vec<_>, String>>()
 }
 
 /// The `id` is the full ID of the function, e.g. `"foo:bar/baz"`
 pub fn parse_function(id: &str, contents: &str) -> Result<Function, String> {
     let id = id.parse()?;
     let cmds = parse_function_body(contents)?;
-	Ok(Function { id, cmds })
+    Ok(Function { id, cmds })
 }
 
-fn get_functions_in_dir(namespace: &str, path_prefix: &str, dir: &Directory) -> Result<Vec<Function>, String> {
+fn get_functions_in_dir(
+    namespace: &str,
+    path_prefix: &str,
+    dir: &Directory,
+) -> Result<Vec<Function>, String> {
     let mut funcs = Vec::new();
 
     for (subdir_name, subdir) in dir.directories.iter() {
         let prefix = format!("{}{}/", path_prefix, subdir_name);
-        funcs.extend(get_functions_in_dir(namespace, &prefix, &subdir)?);
+        funcs.extend(get_functions_in_dir(namespace, &prefix, subdir)?);
     }
 
     for (func_name, func) in dir.files.iter() {
@@ -399,13 +411,15 @@ fn get_functions_in_dir(namespace: &str, path_prefix: &str, dir: &Directory) -> 
 
 /// Parses all of the functions contained in the datapack `dir`
 pub fn get_functions(dir: &Directory) -> Result<Vec<Function>, String> {
-    let data_dir = dir.directories.get("data")
+    let data_dir = dir
+        .directories
+        .get("data")
         .ok_or_else(|| "datapack did not contain `data` directory".to_string())?;
-    
+
     let mut funcs = Vec::new();
-    
+
     for (namespace, contents) in data_dir.directories.iter() {
-        funcs.extend(get_functions_in_dir(&namespace, "", contents)?);
+        funcs.extend(get_functions_in_dir(namespace, "", contents)?);
     }
 
     Ok(funcs)
@@ -416,18 +430,22 @@ fn get_func_file<'a>(id: &FunctionIdent, root_dir: &'a mut Directory) -> &'a mut
     let namespace_dir = data_dir.dir((&*id.namespace).to_owned());
 
     let mut func_dir = namespace_dir;
-    let mut path = id.path.split('/').collect::<Vec<&str>>();
+    let path = id.path.split('/').collect::<Vec<&str>>();
 
     for &part in path[..path.len() - 1].iter() {
         func_dir = func_dir.dir(part.to_owned());
-    } 
+    }
 
     let file_name = format!("{}.mcfunction", path.last().unwrap());
     func_dir.file(file_name)
 }
 
 pub fn write_function(func: &Function, root_dir: &mut Directory) {
-    let contents = func.cmds.iter().map(|c| c.to_string()).collect::<Vec<String>>();
+    let contents = func
+        .cmds
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<String>>();
     let contents = contents.join("\n");
 
     let func_file = get_func_file(&func.id, root_dir);

@@ -1,6 +1,14 @@
-use std::{collections::BTreeMap, convert::{TryFrom, TryInto}, fmt, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    convert::{TryFrom, TryInto},
+    fmt,
+    str::FromStr,
+};
 
-use super::{FunctionIdent, MinecraftRange, Objective, ObjectiveCriterion, ScoreHolder, ScoreboardComparison, raw_text::TextComponent};
+use super::{
+    raw_text::TextComponent, FunctionIdent, MinecraftRange, Objective, ObjectiveCriterion,
+    ScoreHolder, ScoreboardComparison,
+};
 
 struct CommandParser<'a> {
     tail: &'a str,
@@ -100,7 +108,11 @@ impl CommandParser<'_> {
     pub fn parse_summon(&mut self) -> CmdParseResult<Command> {
         let entity = self.next_word()?.to_string();
         let pos = self.parse_rel_pos()?;
-        let data = if self.tail.is_empty() { None } else { Some(self.tail.to_string()) };
+        let data = if self.tail.is_empty() {
+            None
+        } else {
+            Some(self.tail.to_string())
+        };
 
         Ok(Summon { entity, pos, data }.into())
     }
@@ -122,9 +134,10 @@ impl CommandParser<'_> {
     }
 
     pub fn parse_block_spec(&mut self) -> CmdParseResult<BlockSpec> {
-        let id_end = self.tail.find(|c: char| {
-            !(c.is_alphanumeric() || c == ':' || c == '_')
-        }).unwrap_or(self.tail.len());
+        let id_end = self
+            .tail
+            .find(|c: char| !(c.is_alphanumeric() || c == ':' || c == '_'))
+            .unwrap_or(self.tail.len());
 
         let id = self.tail[..id_end].to_string();
         self.tail = &self.tail[id_end..];
@@ -166,17 +179,13 @@ impl CommandParser<'_> {
 
         // TODO: Error
         assert_eq!(depth, 0, "{:?}", start);
-        
+
         let result = &self.tail[..final_idx];
-        self.tail = &self.tail[final_idx..].trim();
+        self.tail = self.tail[final_idx..].trim();
 
         let nbt = result.to_string();
 
-        Ok(BlockSpec {
-            id,
-            state,
-            nbt,
-        })
+        Ok(BlockSpec { id, state, nbt })
     }
 
     pub fn parse_setblock(&mut self) -> CmdParseResult<Command> {
@@ -212,10 +221,12 @@ impl CommandParser<'_> {
 
                     Ok(DataModifySource::ValueString(value))
                 } else {
-                    Ok(DataModifySource::Value(self.next_word()?.parse::<i32>().expect("TODO:")))
+                    Ok(DataModifySource::Value(
+                        self.next_word()?.parse::<i32>().expect("TODO:"),
+                    ))
                 }
             }
-            nw => todo!("{:?}", nw)
+            nw => todo!("{:?}", nw),
         }
     }
 
@@ -234,7 +245,11 @@ impl CommandParser<'_> {
                 let path = self.parse_nbt_path()?;
                 let modkind = self.next_word()?.parse::<DataModifyKind>().unwrap();
                 let modsource = self.parse_modify_source()?;
-                DataKind::Modify { path, kind: modkind, source: modsource }
+                DataKind::Modify {
+                    path,
+                    kind: modkind,
+                    source: modsource,
+                }
             }
             nw => todo!("{:?}", nw),
         };
@@ -323,7 +338,9 @@ impl CommandParser<'_> {
 
     pub fn parse_coord(&mut self) -> CmdParseResult<Coord> {
         let coord = self.next_word()?;
-        Ok(coord.parse().unwrap_or_else(|e| panic!("TODO: {:?} {:?}", coord, e)))
+        Ok(coord
+            .parse()
+            .unwrap_or_else(|e| panic!("TODO: {:?} {:?}", coord, e)))
     }
 
     pub fn parse_rel_pos(&mut self) -> CmdParseResult<RelBlockPos> {
@@ -753,13 +770,16 @@ impl FromStr for Coord {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "~" {
-            Ok(Coord { val: 0, is_rel: true })
-        } else if let Some(s) = s.strip_prefix("~") {
+            Ok(Coord {
+                val: 0,
+                is_rel: true,
+            })
+        } else if let Some(s) = s.strip_prefix('~') {
             let val = s.parse::<i32>().map_err(|s| s.to_string())?;
             Ok(Coord { val, is_rel: true })
         } else {
             let val = s.parse::<i32>().map_err(|s| s.to_string())?;
-            Ok(Coord { val, is_rel: false } )
+            Ok(Coord { val, is_rel: false })
         }
     }
 }
@@ -826,13 +846,12 @@ impl FromStr for RelBlockPos {
         let y = s.next().ok_or_else(|| "expected y".to_string())?;
         let z = s.next().ok_or_else(|| "expected z".to_string())?;
         if s.next().is_some() {
-            return Err("unexpected trailing data".to_string())
+            return Err("unexpected trailing data".to_string());
         }
 
         Ok(RelBlockPos(x.parse()?, y.parse()?, z.parse()?))
     }
 }
-
 
 pub type NbtPath = String;
 pub type BlockPos = String;
@@ -865,8 +884,8 @@ impl BlockState {
     pub fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key).map(|v| v.as_str())
     }
-    
-    pub fn items(&self) -> impl Iterator<Item=(&str, &str)> {
+
+    pub fn items(&self) -> impl Iterator<Item = (&str, &str)> {
         self.0.iter().map(|(k, v)| (k.as_str(), v.as_str()))
     }
 
@@ -882,7 +901,7 @@ impl FromStr for BlockState {
         let orig_s = s;
 
         if !s.starts_with('[') {
-            return Err(format!("expected '[' at beginning of {}", orig_s))
+            return Err(format!("expected '[' at beginning of {}", orig_s));
         }
         s = &s[1..];
 
@@ -891,11 +910,14 @@ impl FromStr for BlockState {
         }
         s = &s[..s.len() - 1];
 
-        let inner = s.split(',').map(|pair| {
-            pair.split_once('=')
-                .map(|(l, r)| (l.to_string(), r.to_string()))
-                .ok_or_else(|| format!("missing '=' in {}", orig_s))
-        }).collect::<Result<BTreeMap<String, String>, _>>()?;
+        let inner = s
+            .split(',')
+            .map(|pair| {
+                pair.split_once('=')
+                    .map(|(l, r)| (l.to_string(), r.to_string()))
+                    .ok_or_else(|| format!("missing '=' in {}", orig_s))
+            })
+            .collect::<Result<BTreeMap<String, String>, _>>()?;
 
         Ok(BlockState(inner))
     }
@@ -952,7 +974,7 @@ impl FromStr for SetBlockKind {
             "destroy" => Ok(Self::Destroy),
             "keep" => Ok(Self::Keep),
             "replace" => Ok(Self::Replace),
-            _ => Err(format!("invalid setblock kind `{}`", s))
+            _ => Err(format!("invalid setblock kind `{}`", s)),
         }
     }
 }
@@ -1034,7 +1056,6 @@ impl fmt::Display for ScoreSet {
         )
     }
 }
-
 
 /// `scoreboard players operation <targets> <targetObjective> <operation> <source> <sourceObjective>`
 ///
@@ -1171,7 +1192,7 @@ impl FromStr for DataModifyKind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "set" => Ok(DataModifyKind::Set),
-            _ => Err(format!("invalid data modify kind {}", s))
+            _ => Err(format!("invalid data modify kind {}", s)),
         }
     }
 }
@@ -1305,7 +1326,7 @@ pub enum ExecuteSubCmd {
     // TODO: There's another one
     Positioned {
         pos: String,
-    }
+    },
 }
 
 impl fmt::Display for ExecuteSubCmd {
@@ -1411,7 +1432,9 @@ impl fmt::Display for FuncCall {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(into = "String", try_from = "&str")]
 pub enum Target {
     Uuid(ScoreHolder),
@@ -1420,9 +1443,9 @@ pub enum Target {
 }
 
 impl From<Target> for String {
-	fn from(t: Target) -> String {
-		t.to_string()
-	}
+    fn from(t: Target) -> String {
+        t.to_string()
+    }
 }
 
 impl TryFrom<&str> for Target {
@@ -1470,7 +1493,9 @@ impl fmt::Display for Target {
 }
 
 /// A target selector, like `@p` or `@e[tag=foo]`
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(into = "String", try_from = "&str")]
 pub struct Selector {
     pub var: SelectorVariable,

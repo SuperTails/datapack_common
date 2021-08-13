@@ -1,7 +1,4 @@
-use super::command::{
-    BlockPos, NbtPath, Selector,
-    StorageId, StringNbt,
-};
+use super::command::{BlockPos, NbtPath, Selector, StorageId, StringNbt};
 use super::{Objective, ScoreHolder};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;

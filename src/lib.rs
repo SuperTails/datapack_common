@@ -5,9 +5,9 @@ use vfs::Directory;
 pub mod functions;
 
 pub struct Datapack {
-	pub functions: Vec<Function>,
-	pub description: String,
-	pub pack_format: u32,
+    pub functions: Vec<Function>,
+    pub description: String,
+    pub pack_format: u32,
 }
 
 impl Datapack {
@@ -15,17 +15,16 @@ impl Datapack {
         let mut dir = Directory::default();
 
         let pack_mcmeta_file = dir.file("pack.mcmeta".to_owned());
-        let pack_mcmeta_contents =
-            PackMcmeta {
-                pack: PackInfo {
-                    description: Cow::Borrowed(&self.description),
-                    pack_format: self.pack_format,
-                }
-            };
+        let pack_mcmeta_contents = PackMcmeta {
+            pack: PackInfo {
+                description: Cow::Borrowed(&self.description),
+                pack_format: self.pack_format,
+            },
+        };
 
         pack_mcmeta_file.contents = serde_json::to_string(&pack_mcmeta_contents)
             .map_err(|e| format!("failed to serialize `pack.mcmeta`: {}", e))?;
-        
+
         for func in self.functions.iter() {
             functions::write_function(func, &mut dir);
         }
@@ -34,12 +33,14 @@ impl Datapack {
     }
 
     pub fn from_directory(dir: &Directory) -> Result<Self, String> {
-        let pack_mcmeta = dir.files.get("pack.mcmeta")
+        let pack_mcmeta = dir
+            .files
+            .get("pack.mcmeta")
             .ok_or_else(|| "datapack did not contain a `pack.mcmeta`".to_string())?;
-        
+
         let pack_mcmeta: PackMcmeta = serde_json::from_str(&pack_mcmeta.contents)
             .map_err(|e| format!("invalid `pack.mcmeta`: {}", e))?;
-        
+
         let functions = functions::get_functions(dir)?;
 
         Ok(Datapack {
@@ -54,7 +55,7 @@ impl Datapack {
 /// This struct exists because the `pack.mcmeta` file has a top-level object
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PackMcmeta<'a> {
-    pub pack: PackInfo<'a>
+    pub pack: PackInfo<'a>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -64,5 +65,4 @@ struct PackInfo<'a> {
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}
