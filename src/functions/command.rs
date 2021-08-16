@@ -59,7 +59,7 @@ where
 }
 
 #[parser]
-mod commands {
+pub mod commands {
     use crate::functions::{
         command_components::{
             BlockSpec, CommentMessage, DataPath, DataTarget, Entity, FillBlockKind, JsonText,
@@ -71,27 +71,6 @@ mod commands {
 
     use super::{DataModifyKind, ExecuteSubCommand, Optional, Repeated};
 
-    // #[derive(Debug, PartialEq, Clone)]
-    // pub enum Command {
-    //     Gamerule(Gamerule),
-    //     Kill(Kill),
-    //     Fill(Fill),
-    //     Summon(Summon),
-    //     CloneCmd(CloneCmd),
-    //     SetBlock(SetBlock),
-    //     ObjRemove(ObjRemove),
-    //     ObjAdd(ObjAdd),
-    //     ScoreOp(ScoreOp),
-    //     ScoreSet(ScoreSet),
-    //     ScoreGet(ScoreGet),
-    //     ScoreAdd(ScoreAdd),
-    //     Execute(Execute),
-    //     FuncCall(FuncCall),
-    //     Data(Data),
-    //     Tellraw(Box<Tellraw>),
-    //     Teleport(Teleport),
-    //     Comment(String),
-    // }
     #[derive(Debug, PartialEq, Clone)]
     pub enum Command {}
 
@@ -253,7 +232,7 @@ mod commands {
 pub use commands::Command;
 
 #[parser]
-mod data_modify_kinds {
+pub mod data_modify_kinds {
     use crate::functions::command_components::{DataLiteral, DataPath, DataTarget};
 
     use super::Optional;
@@ -345,7 +324,7 @@ pub use data_modify_kinds::DataModifyKind;
 
 // TODO: maybe create a generic condition enum which holds the `is_unless` attribute
 #[parser]
-mod exexute_sub_commands {
+pub mod exexute_sub_commands {
     use crate::functions::command_components::{
         BlockSpec, DataPath, DataTarget, MinecraftRange, Objective, RelBlockPos, RelPos,
         ScoreboardComparison, Target,
