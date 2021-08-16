@@ -61,7 +61,7 @@ impl CommandParse for CommentMessage {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct JsonText {
-    components: Vec<TextComponent>,
+    pub components: Vec<TextComponent>,
 }
 
 impl fmt::Display for JsonText {

@@ -149,7 +149,7 @@ pub mod commands {
     #[parse("kill $target")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Kill {
-        target: Target,
+        pub target: Target,
     }
 
     #[parse("scoreboard objectives add $0")]
@@ -244,79 +244,79 @@ pub mod data_modify_kinds {
     #[parse("append from $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct AppendFrom {
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 
     #[parse("append value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Append {
-        value: DataLiteral,
+        pub value: DataLiteral,
     }
 
     #[parse("insert $index from $target", source=Optional(None))]
     #[parse("insert $index from $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct InsertFrom {
-        index: i32,
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub index: i32,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 
     #[parse("insert $index value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Insert {
-        index: i32,
-        value: DataLiteral,
+        pub index: i32,
+        pub value: DataLiteral,
     }
 
     #[parse("merge from $target", source=Optional(None))]
     #[parse("merge from $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct MergeFrom {
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 
     #[parse("merge value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Merge {
-        value: DataLiteral,
+        pub value: DataLiteral,
     }
 
     #[parse("prepend from $target", source=Optional(None))]
     #[parse("prepend from $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct PrependFrom {
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 
     #[parse("prepend value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Prepend {
-        value: DataLiteral,
+        pub value: DataLiteral,
     }
 
     #[parse("set from $target", source=Optional(None))]
     #[parse("set from $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct SetFrom {
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 
     #[parse("set value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Set {
-        value: DataLiteral,
+        pub value: DataLiteral,
     }
 
     #[parse("remove $target $source")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Remove {
-        target: DataTarget,
-        source: Optional<DataPath>,
+        pub target: DataTarget,
+        pub source: Optional<DataPath>,
     }
 }
 
@@ -337,10 +337,10 @@ pub mod exexute_sub_commands {
     #[parse("unless score $target $target_obj matches $range", is_unless = true)]
     #[derive(Debug, Clone, PartialEq)]
     pub struct IfScoreMatches {
-        is_unless: bool,
-        target: Target,
-        target_obj: Objective,
-        range: MinecraftRange,
+        pub is_unless: bool,
+        pub target: Target,
+        pub target_obj: Objective,
+        pub range: MinecraftRange,
     }
 
     #[parse(
@@ -353,58 +353,58 @@ pub mod exexute_sub_commands {
     )]
     #[derive(Debug, Clone, PartialEq)]
     pub struct IfScoreRelation {
-        is_unless: bool,
-        target: Target,
-        target_obj: Objective,
-        relation: ScoreboardComparison,
-        source: Target,
-        source_obj: Objective,
+        pub is_unless: bool,
+        pub target: Target,
+        pub target_obj: Objective,
+        pub relation: ScoreboardComparison,
+        pub source: Target,
+        pub source_obj: Objective,
     }
 
     #[parse("if block $pos $block", is_unless = false)]
     #[parse("unless block $pos $block", is_unless = true)]
     #[derive(Debug, Clone, PartialEq)]
     pub struct IfBlock {
-        is_unless: bool,
-        pos: RelBlockPos,
-        block: BlockSpec,
+        pub is_unless: bool,
+        pub pos: RelBlockPos,
+        pub block: BlockSpec,
     }
 
     #[parse("store result score $target $target_obj", is_success = false)]
     #[parse("store success score $target $target_obj", is_success = true)]
     #[derive(Debug, Clone, PartialEq)]
     pub struct StoreScore {
-        is_success: bool,
-        target: Target,
-        target_obj: Objective,
+        pub is_success: bool,
+        pub target: Target,
+        pub target_obj: Objective,
     }
 
     #[parse("store result $target $path $scale", is_success = false)]
     #[parse("store success $target $path $scale", is_success = true)]
     #[derive(Debug, Clone, PartialEq)]
     pub struct StoreStorage {
-        is_success: bool,
-        target: DataTarget,
-        path: DataPath,
-        scale: f64,
+        pub is_success: bool,
+        pub target: DataTarget,
+        pub path: DataPath,
+        pub scale: f64,
     }
 
     #[parse("as $target")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct As {
-        target: Target,
+        pub target: Target,
     }
 
     #[parse("at $target")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct At {
-        target: Target,
+        pub target: Target,
     }
 
     #[parse("positioned $pos")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Positioned {
-        pos: RelPos,
+        pub pos: RelPos,
     }
 }
 
