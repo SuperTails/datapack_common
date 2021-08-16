@@ -14,6 +14,7 @@ pub type BlockId = String;
 pub type StorageId = String;
 pub type Entity = String;
 pub type DataPath = String;
+pub type DataType = String;
 pub type RelPos = String;
 pub type DataLiteral = String;
 

@@ -326,7 +326,7 @@ pub use data_modify_kinds::DataModifyKind;
 #[parser]
 pub mod execute_sub_commands {
     use crate::functions::command_components::{
-        BlockSpec, DataPath, DataTarget, MinecraftRange, Objective, RelBlockPos, RelPos,
+        BlockSpec, DataPath, DataTarget, DataType, MinecraftRange, Objective, RelBlockPos, RelPos,
         ScoreboardComparison, Target,
     };
 
@@ -379,13 +379,14 @@ pub mod execute_sub_commands {
         pub target_obj: Objective,
     }
 
-    #[parse("store result $target $path $scale", is_success = false)]
-    #[parse("store success $target $path $scale", is_success = true)]
+    #[parse("store result $target $path $ty $scale", is_success = false)]
+    #[parse("store success $target $path $ty $scale", is_success = true)]
     #[derive(Debug, Clone, PartialEq)]
     pub struct StoreStorage {
         pub is_success: bool,
         pub target: DataTarget,
         pub path: DataPath,
+        pub ty: DataType,
         pub scale: f64,
     }
 
@@ -448,6 +449,7 @@ mod test {
         roundtrip_command("execute run kill @e");
         roundtrip_command("execute if score source source_objective matches 0..10 run kill @e");
         roundtrip_command("execute as @a");
+        roundtrip_command("execute store success block ~ ~1 ~ foo.bar int 1.5")
     }
 
     #[test]
