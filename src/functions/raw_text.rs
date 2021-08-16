@@ -1,5 +1,12 @@
-use super::command::{BlockPos, NbtPath, Selector, StorageId, StringNbt};
-use super::{Objective, ScoreHolder};
+use std::fmt;
+
+use super::{
+    command_components::{
+        NbtPath, Objective, RelBlockPos, ScoreHolder, Selector, StorageId, StringNbt,
+    },
+    find_balanced_bracket,
+};
+use command_parser::CommandParse;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -96,7 +103,7 @@ pub struct TextComponent {
 
     // --- Other tags that go with `nbt` but aren't in a structure for some reason ---
     pub interpret: Option<bool>,
-    pub block: Option<BlockPos>,
+    pub block: Option<RelBlockPos>,
     pub entity: Option<Selector>,
     pub storage: Option<StorageId>,
 
@@ -167,6 +174,20 @@ impl TextComponent {
         } else {
             self
         }
+    }
+}
+
+impl fmt::Display for TextComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap())
+    }
+}
+
+impl CommandParse for TextComponent {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        let (rest, raw_component) = find_balanced_bracket(value)?;
+        let component = serde_json::from_str(raw_component).map_err(|_| value)?;
+        Ok((rest, component))
     }
 }
 
