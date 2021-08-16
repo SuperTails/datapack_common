@@ -324,7 +324,7 @@ pub use data_modify_kinds::DataModifyKind;
 
 // TODO: maybe create a generic condition enum which holds the `is_unless` attribute
 #[parser]
-pub mod exexute_sub_commands {
+pub mod execute_sub_commands {
     use crate::functions::command_components::{
         BlockSpec, DataPath, DataTarget, MinecraftRange, Objective, RelBlockPos, RelPos,
         ScoreboardComparison, Target,
@@ -408,7 +408,7 @@ pub mod exexute_sub_commands {
     }
 }
 
-pub use exexute_sub_commands::ExecuteSubCommand;
+pub use execute_sub_commands::ExecuteSubCommand;
 
 #[cfg(test)]
 mod test {
