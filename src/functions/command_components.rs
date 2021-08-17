@@ -1,9 +1,10 @@
 //! This file contains various components used in minecrafts commands
 
-use std::{collections::BTreeMap, convert::TryFrom, fmt, rc::Rc};
+use std::{collections::BTreeMap, convert::{TryFrom, AsRef}, fmt, rc::Rc, borrow::Borrow};
 
 use command_parser::{parse_command, parse_multiple_commands, parse_str, CommandParse};
 use itertools::Itertools;
+use serde_json::Deserializer;
 
 use super::{find_balanced_bracket, raw_text::TextComponent};
 
@@ -75,18 +76,24 @@ impl fmt::Display for JsonText {
 }
 
 impl CommandParse for JsonText {
-    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, components) = if let Some(rest) = value.strip_prefix('[') {
-            let (rest, components) = parse_multiple_commands(rest);
-            if !rest.starts_with(']') {
-                return Err(rest);
-            }
-            (&rest[1..], components)
+    fn parse_from_command(mut value: &str) -> Result<(&str, Self), &str> {
+        value = value.trim_start();
+
+        let (rest, components) = if value.starts_with('[') {
+            let mut stream = Deserializer::from_str(value).into_iter::<Vec<TextComponent>>();
+            let components = stream.next().ok_or(value)?.map_err(|_| value)?;
+            let rest = &value[stream.byte_offset()..];
+            (rest, components)
         } else {
-            let (rest, component) = TextComponent::parse_from_command(value)?;
+            let mut stream = Deserializer::from_str(value).into_iter::<TextComponent>();
+            let component = stream.next().ok_or(value)?.map_err(|_| value)?;
+            let rest = &value[stream.byte_offset()..];
             (rest, vec![component])
         };
-        Ok((rest, JsonText { components }))
+
+        let result = JsonText { components };
+
+        Ok((rest, result))
     }
 }
 
@@ -150,7 +157,8 @@ impl fmt::Display for Coord {
 }
 
 impl CommandParse for Coord {
-    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+    fn parse_from_command(mut value: &str) -> Result<(&str, Self), &str> {
+        value = value.trim_start();
         let mut chars = value.chars();
         let first_char = chars.next().ok_or(value)?;
         let (mode, value) = match first_char {
@@ -599,6 +607,18 @@ impl ScoreHolder {
     }
 }
 
+impl AsRef<str> for ScoreHolder {
+    fn as_ref(&self) -> &str {
+        self.borrow()
+    }
+}
+
+impl Borrow<str> for ScoreHolder {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 impl fmt::Display for ScoreHolder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -656,6 +676,18 @@ impl Objective {
     }
 }
 
+impl AsRef<str> for Objective {
+    fn as_ref(&self) -> &str {
+        self.borrow()
+    }
+}
+
+impl Borrow<str> for Objective {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 impl fmt::Display for Objective {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -700,16 +732,19 @@ impl fmt::Display for SelectorVariable {
 
 impl CommandParse for SelectorVariable {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, word) = parse_str(value);
-        let val = match word {
-            "@p" => SelectorVariable::NearestPlayer,
-            "@a" => SelectorVariable::AllPlayers,
-            "@r" => SelectorVariable::RandomPlayer,
-            "@s" => SelectorVariable::ThisEntity,
-            "@e" => SelectorVariable::AllEntities,
-            _ => return Err(value),
-        };
-        Ok((rest, val))
+        if let Some(rest) = value.strip_prefix("@p") {
+            Ok((rest, SelectorVariable::NearestPlayer))
+        } else if let Some(rest) = value.strip_prefix("@a") {
+            Ok((rest, SelectorVariable::AllPlayers))
+        } else if let Some(rest) = value.strip_prefix("@r") {
+            Ok((rest, SelectorVariable::RandomPlayer))
+        } else if let Some(rest) = value.strip_prefix("@s") {
+            Ok((rest, SelectorVariable::ThisEntity))
+        } else if let Some(rest) = value.strip_prefix("@e") {
+            Ok((rest, SelectorVariable::AllEntities))
+        } else {
+            Err(value)
+        }
     }
 }
 
@@ -725,8 +760,16 @@ impl fmt::Display for SelectorArg {
 }
 
 impl CommandParse for SelectorArg {
-    fn parse_from_command(_: &str) -> Result<(&str, Self), &str> {
-        todo!("Parse all selector arguments")
+    fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
+        let end_idx = s.find(',').or_else(|| s.find(']'));
+
+        if let Some(end_idx) = end_idx {
+            let (arg, rest) = s.split_at(end_idx);
+
+            Ok((rest, SelectorArg(arg.to_string())))
+        } else {
+            Err(s)
+        }
     }
 }
 
@@ -758,7 +801,7 @@ impl fmt::Display for Selector {
         write!(f, "{}", self.var)?;
         let args = self.args.iter().map(|arg| arg.to_string()).join(", ");
         if !args.is_empty() {
-            write!(f, "{}", args)?;
+            write!(f, "[{}]", args)?;
         }
         Ok(())
     }
@@ -781,14 +824,22 @@ impl CommandParse for Selector {
 
         let mut args = Vec::new();
         loop {
-            if rest.is_empty() || rest.starts_with(']') {
+            if rest.starts_with(']') {
                 break;
             }
 
             let (next_rest, arg) = SelectorArg::parse_from_command(rest)?;
             rest = next_rest;
             args.push(arg);
+
+            if let Some(next_rest) = rest.strip_prefix(',') {
+                rest = next_rest.trim_start();
+            }
+
         }
+
+        rest = rest.strip_prefix(']').unwrap();
+
         Ok((
             rest,
             Selector {
@@ -835,10 +886,10 @@ impl CommandParse for Target {
         let (_, word) = parse_str(value);
         if word.starts_with('@') {
             let (rest, selector) = Selector::parse_from_command(value)?;
-            Ok((rest, Target::Selector(selector)))
+            Ok((rest.trim_start(), Target::Selector(selector)))
         } else {
             let (rest, holder) = ScoreHolder::parse_from_command(value)?;
-            Ok((rest, Target::Name(holder)))
+            Ok((rest.trim_start(), Target::Name(holder)))
         }
     }
 }

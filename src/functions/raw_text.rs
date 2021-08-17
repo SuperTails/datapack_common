@@ -8,6 +8,7 @@ use super::{
 };
 use command_parser::CommandParse;
 use serde::{Deserialize, Serialize};
+use serde_json::Deserializer;
 use serde_with::skip_serializing_none;
 
 #[derive(Default)]
@@ -185,8 +186,9 @@ impl fmt::Display for TextComponent {
 
 impl CommandParse for TextComponent {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, raw_component) = find_balanced_bracket(value)?;
-        let component = serde_json::from_str(raw_component).map_err(|_| value)?;
+        let mut stream = Deserializer::from_str(value).into_iter::<TextComponent>();
+        let component = stream.next().ok_or(value)?.map_err(|_| value)?;
+        let rest = &value[stream.byte_offset()..];
         Ok((rest, component))
     }
 }

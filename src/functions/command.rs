@@ -63,8 +63,8 @@ pub mod commands {
     use crate::functions::{
         command_components::{
             BlockSpec, CommentMessage, DataPath, DataTarget, Entity, FillBlockKind, JsonText,
-            Objective, RelBlockPos, SNbt, ScoreOpKind, ScoreboardTarget, Selector, SetBlockKind,
-            Target,
+            Objective, ObjectiveCriterion, RelBlockPos, SNbt, ScoreOpKind, ScoreboardTarget,
+            Selector, SetBlockKind, Target,
         },
         FunctionIdent,
     };
@@ -152,9 +152,9 @@ pub mod commands {
         pub target: Target,
     }
 
-    #[parse("scoreboard objectives add $0")]
+    #[parse("scoreboard objectives add $0 $1")]
     #[derive(Debug, PartialEq, Clone)]
-    pub struct ObjAdd(pub Objective);
+    pub struct ObjAdd(pub Objective, pub ObjectiveCriterion);
 
     #[parse("scoreboard objectives remove $0")]
     #[derive(Debug, PartialEq, Clone)]
@@ -465,7 +465,7 @@ mod test {
 
     #[test]
     fn test_kill() {
-        roundtrip_command("kill @e");
+        roundtrip_command("kill @e[tag=foo, type=player]");
         roundtrip_command("kill player");
     }
 
@@ -476,7 +476,7 @@ mod test {
 
     #[test]
     fn test_obj_add() {
-        roundtrip_command("scoreboard objectives add my_scoreboard");
+        roundtrip_command("scoreboard objectives add my_scoreboard dummy");
     }
 
     #[test]
@@ -554,5 +554,6 @@ mod test {
     #[test]
     fn test_tellraw() {
         roundtrip_command(r#"tellraw @a {"text":"Hello"}"#);
+        roundtrip_command(r#"tellraw @a [{"text":"Hello"},{"text":"World"}]"#);
     }
 }

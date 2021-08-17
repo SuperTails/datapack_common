@@ -38,7 +38,6 @@ fn find_balanced_bracket(value: &str) -> Result<(&str, &str), &str> {
     }
 
     if let Some(end_idx) = end_idx {
-        chars.next();
         let rest = chars.as_str();
         Ok((rest, &value[..=end_idx]))
     } else {
