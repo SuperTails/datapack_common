@@ -1,9 +1,7 @@
 use std::fmt;
 
-use super::{
-    command_components::{
-        NbtPath, Objective, RelBlockPos, ScoreHolder, Selector, StorageId, StringNbt,
-    },
+use super::command_components::{
+    NbtPath, Objective, RelBlockPos, ScoreHolder, Selector, StorageId, StringNbt,
 };
 use command_parser::CommandParse;
 use serde::{Deserialize, Serialize};

@@ -63,8 +63,8 @@ pub mod commands {
     use crate::functions::{
         command_components::{
             BlockSpec, CommentMessage, DataPath, DataTarget, Entity, FillBlockKind, JsonText,
-            Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound, ScoreOpKind, ScoreboardTarget,
-            Selector, SetBlockKind, Target,
+            Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound, ScoreOpKind,
+            ScoreboardTarget, Selector, SetBlockKind, Target,
         },
         FunctionIdent,
     };
@@ -455,7 +455,9 @@ mod test {
         roundtrip_command("execute at @e[tag=foo] run kill @e");
 
         // This test originally failed because of the `@e[tag=frameptr]` and the comma in the block SNBT.
-        roundtrip_command("execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{foo:1,bar:2}");
+        roundtrip_command(
+            "execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{foo:1,bar:2}",
+        );
     }
 
     #[test]

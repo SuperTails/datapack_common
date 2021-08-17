@@ -1,6 +1,12 @@
 //! This file contains various components used in minecrafts commands
 
-use std::{collections::BTreeMap, convert::{TryFrom, AsRef}, fmt, rc::Rc, borrow::Borrow};
+use std::{
+    borrow::Borrow,
+    collections::BTreeMap,
+    convert::{AsRef, TryFrom},
+    fmt,
+    rc::Rc,
+};
 
 use command_parser::{parse_command, parse_str, CommandParse};
 use itertools::Itertools;
@@ -38,7 +44,9 @@ impl fmt::Display for BlockId {
 
 impl CommandParse for BlockId {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let end_idx = value.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')).unwrap_or(value.len());
+        let end_idx = value
+            .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
+            .unwrap_or(value.len());
 
         let block_id = value[..end_idx].to_string();
         let rest = &value[end_idx..];
@@ -95,13 +103,14 @@ fn parse_quoted(s: &str) -> Result<(&str, &str), &str> {
     if s.starts_with('"') {
         let mut is_first = true;
 
-        let is_next_quote = |c: char|
+        let is_next_quote = |c: char| {
             if is_first {
                 is_first = false;
                 false
             } else {
                 c == '"'
-            };
+            }
+        };
 
         let end_idx = s.find(is_next_quote).ok_or(s)? + 1;
 
@@ -914,7 +923,6 @@ impl CommandParse for Selector {
             if let Some(next_rest) = rest.strip_prefix(',') {
                 rest = next_rest.trim_start();
             }
-
         }
 
         rest = rest.strip_prefix(']').unwrap();
