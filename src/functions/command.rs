@@ -63,7 +63,7 @@ pub mod commands {
     use crate::functions::{
         command_components::{
             BlockSpec, CommentMessage, DataPath, DataTarget, Entity, FillBlockKind, JsonText,
-            Objective, ObjectiveCriterion, RelBlockPos, SNbt, ScoreOpKind, ScoreboardTarget,
+            Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound, ScoreOpKind, ScoreboardTarget,
             Selector, SetBlockKind, Target,
         },
         FunctionIdent,
@@ -210,7 +210,7 @@ pub mod commands {
     pub struct Summon {
         pub entity: Entity,
         pub pos: RelBlockPos,
-        pub data: Optional<SNbt>,
+        pub data: Optional<SNbtCompound>,
     }
 
     #[parse("tp $target $pos")]
@@ -233,7 +233,7 @@ pub use commands::Command;
 
 #[parser]
 pub mod data_modify_kinds {
-    use crate::functions::command_components::{DataLiteral, DataPath, DataTarget};
+    use crate::functions::command_components::{DataPath, DataTarget, SNbt};
 
     use super::Optional;
 
@@ -251,7 +251,7 @@ pub mod data_modify_kinds {
     #[parse("append value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Append {
-        pub value: DataLiteral,
+        pub value: SNbt,
     }
 
     #[parse("insert $index from $target", source=Optional(None))]
@@ -267,7 +267,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct Insert {
         pub index: i32,
-        pub value: DataLiteral,
+        pub value: SNbt,
     }
 
     #[parse("merge from $target", source=Optional(None))]
@@ -281,7 +281,7 @@ pub mod data_modify_kinds {
     #[parse("merge value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Merge {
-        pub value: DataLiteral,
+        pub value: SNbt,
     }
 
     #[parse("prepend from $target", source=Optional(None))]
@@ -295,7 +295,7 @@ pub mod data_modify_kinds {
     #[parse("prepend value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Prepend {
-        pub value: DataLiteral,
+        pub value: SNbt,
     }
 
     #[parse("set from $target", source=Optional(None))]
@@ -309,7 +309,7 @@ pub mod data_modify_kinds {
     #[parse("set value $value")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Set {
-        pub value: DataLiteral,
+        pub value: SNbt,
     }
 
     #[parse("remove $target $source")]
@@ -436,6 +436,7 @@ mod test {
         roundtrip_command("data get block 0 0 0 foo.bar.baz");
         roundtrip_command("data get entity @s foo.bar.baz 0.00115");
         roundtrip_command("data modify block 0 0 0 foo.bar.baz set value 90");
+        roundtrip_command("data modify block 0 0 0 Command set value \"kill @a\"")
     }
 
     #[test]
@@ -449,7 +450,12 @@ mod test {
         roundtrip_command("execute run kill @e");
         roundtrip_command("execute if score source source_objective matches 0..10 run kill @e");
         roundtrip_command("execute as @a");
-        roundtrip_command("execute store success block ~ ~1 ~ foo.bar int 1.5")
+        roundtrip_command("execute store success block ~ ~1 ~ foo.bar int 1.5");
+        roundtrip_command("execute if score foo bar matches 1 run kill @e");
+        roundtrip_command("execute at @e[tag=foo] run kill @e");
+
+        // This test originally failed because of the `@e[tag=frameptr]` and the comma in the block SNBT.
+        roundtrip_command("execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{foo:1,bar:2}");
     }
 
     #[test]
@@ -461,6 +467,7 @@ mod test {
     fn test_fill() {
         roundtrip_command("fill 0 0 0 1 1 1 block");
         roundtrip_command("fill ~ ~ ~ ~ ~ ~ block[facing=east]");
+        roundtrip_command("fill 0 0 0 1 1 1 block destroy");
     }
 
     #[test]
@@ -539,6 +546,8 @@ mod test {
                 .to_string(),
             "setblock 0 0 0 block"
         );
+        roundtrip_command("setblock 0 0 0 minecraft:command_block{Command:\"kill @a\"}");
+        roundtrip_command("setblock 0 0 0 minecraft:command_block[conditional=true,facing=east]{Command:\"kill @e\"}");
     }
 
     #[test]
@@ -549,6 +558,7 @@ mod test {
     #[test]
     fn test_teleport() {
         roundtrip_command("tp @s 0 0 0");
+        roundtrip_command("tp @s ~-2 1 ~");
     }
 
     #[test]

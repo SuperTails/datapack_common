@@ -4,7 +4,6 @@ use super::{
     command_components::{
         NbtPath, Objective, RelBlockPos, ScoreHolder, Selector, StorageId, StringNbt,
     },
-    find_balanced_bracket,
 };
 use command_parser::CommandParse;
 use serde::{Deserialize, Serialize};

@@ -2,25 +2,65 @@
 
 use std::{collections::BTreeMap, convert::{TryFrom, AsRef}, fmt, rc::Rc, borrow::Borrow};
 
-use command_parser::{parse_command, parse_multiple_commands, parse_str, CommandParse};
+use command_parser::{parse_command, parse_str, CommandParse};
 use itertools::Itertools;
 use serde_json::Deserializer;
 
 use super::{find_balanced_bracket, raw_text::TextComponent};
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BlockId(String);
+
+impl BlockId {
+    pub fn new(s: String) -> Result<Self, String> {
+        // TODO: Determine what characters are valid
+        Ok(BlockId(s))
+    }
+}
+
+impl AsRef<str> for BlockId {
+    fn as_ref(&self) -> &str {
+        self.borrow()
+    }
+}
+
+impl Borrow<str> for BlockId {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for BlockId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl CommandParse for BlockId {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        let end_idx = value.find(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')).unwrap_or(value.len());
+
+        let block_id = value[..end_idx].to_string();
+        let rest = &value[end_idx..];
+
+        if block_id.is_empty() {
+            Err(value)
+        } else {
+            Ok((rest, BlockId(block_id)))
+        }
+    }
+}
+
 // ToDo
 pub type NbtPath = String;
 pub type StringNbt = String;
-pub type BlockId = String;
 pub type StorageId = String;
 pub type Entity = String;
 pub type DataPath = String;
 pub type DataType = String;
 pub type RelPos = String;
-pub type DataLiteral = String;
 
-// TODO: Proper nbt parsing
-#[derive(Debug, Default, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SNbt(String);
 
 impl fmt::Display for SNbt {
@@ -31,12 +71,67 @@ impl fmt::Display for SNbt {
 
 impl CommandParse for SNbt {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        if value.starts_with('{') {
+            let (rest, compound) = SNbtCompound::parse_from_command(value)?;
+            let snbt = SNbt(compound.to_string());
+            Ok((rest, snbt))
+        } else if value.starts_with('"') {
+            let (rest, string) = parse_quoted(value)?;
+            let snbt = SNbt(string.to_string());
+            Ok((rest, snbt))
+        } else if let Ok((rest, v)) = i32::parse_from_command(value) {
+            let snbt = SNbt(v.to_string());
+            Ok((rest, snbt))
+        } else {
+            // TODO: Values that have a datatype suffix, like `42b`
+            // TODO: Lists
+            Err(value)
+        }
+    }
+}
+
+fn parse_quoted(s: &str) -> Result<(&str, &str), &str> {
+    // TODO: Actually implement escapes lol
+    if s.starts_with('"') {
+        let mut is_first = true;
+
+        let is_next_quote = |c: char|
+            if is_first {
+                is_first = false;
+                false
+            } else {
+                c == '"'
+            };
+
+        let end_idx = s.find(is_next_quote).ok_or(s)? + 1;
+
+        let value = &s[..end_idx];
+        let rest = &s[end_idx..];
+
+        Ok((rest, value))
+    } else {
+        Err(s)
+    }
+}
+
+// TODO: Proper nbt parsing
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct SNbtCompound(String);
+
+impl fmt::Display for SNbtCompound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl CommandParse for SNbtCompound {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
         if !value.starts_with('{') {
             return Err(value);
         }
 
         let (rest, nbt) = find_balanced_bracket(value)?;
-        Ok((rest, SNbt(nbt.into())))
+        Ok((rest, SNbtCompound(nbt.into())))
     }
 }
 
@@ -167,12 +262,15 @@ impl CommandParse for Coord {
             _ => (CoordKind::Absolute, value),
         };
 
-        let (rest, value) = if !matches!(mode, CoordKind::Absolute) && value.starts_with(' ') {
-            (&value[1..], 0)
-        } else {
+        let (rest, value) = if mode == CoordKind::Absolute {
             i32::parse_from_command(value)?
+        } else if let Ok((rest, value)) = i32::parse_from_command(value) {
+            (rest, value)
+        } else {
+            (value, 0)
         };
-        Ok((rest, Coord { kind: mode, value }))
+
+        Ok((rest.trim_start(), Coord { kind: mode, value }))
     }
 }
 
@@ -244,8 +342,8 @@ impl CommandParse for BlockState {
         };
 
         let end_idx = value.find(']').ok_or(value)?;
+        let rest = &value[end_idx + 1..];
         let value = &value[..end_idx];
-        let rest = &value[end_idx..];
 
         let states = value
             .split(',')
@@ -262,7 +360,7 @@ impl CommandParse for BlockState {
 pub struct BlockSpec {
     pub id: BlockId,
     pub state: BlockState,
-    pub nbt: SNbt,
+    pub nbt: SNbtCompound,
 }
 
 impl fmt::Display for BlockSpec {
@@ -273,41 +371,18 @@ impl fmt::Display for BlockSpec {
 
 impl CommandParse for BlockSpec {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, block) = BlockId::parse_from_command(value)?;
+        let (rest, id) = BlockId::parse_from_command(value)?;
+
         let (rest, state) = match BlockState::parse_from_command(rest) {
             Ok(val) => val,
-            Err(_) => {
-                return Ok((
-                    rest,
-                    BlockSpec {
-                        id: block,
-                        state: BlockState::default(),
-                        nbt: SNbt::default(),
-                    },
-                ))
-            }
+            Err(_) => (rest, BlockState::default()),
         };
-        let (rest, nbt) = match SNbt::parse_from_command(rest) {
+        let (rest, nbt) = match SNbtCompound::parse_from_command(rest) {
             Ok(val) => val,
-            Err(_) => {
-                return Ok((
-                    rest,
-                    BlockSpec {
-                        id: block,
-                        state,
-                        nbt: SNbt::default(),
-                    },
-                ))
-            }
+            Err(_) => (rest, SNbtCompound::default()),
         };
-        Ok((
-            rest,
-            BlockSpec {
-                id: block,
-                nbt,
-                state,
-            },
-        ))
+
+        Ok((rest, BlockSpec { id, state, nbt }))
     }
 }
 
@@ -336,7 +411,7 @@ impl fmt::Display for FillBlockKind {
 
 impl CommandParse for FillBlockKind {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, word) = parse_str(value);
+        let (rest, word) = parse_str(value.trim_start());
         match word {
             "replace" => match BlockSpec::parse_from_command(rest) {
                 Ok((rest, spec)) => Ok((rest, FillBlockKind::ReplaceFilter(spec))),
@@ -370,7 +445,7 @@ impl fmt::Display for SetBlockKind {
 
 impl CommandParse for SetBlockKind {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let (rest, word) = parse_str(value);
+        let (rest, word) = parse_str(value.trim_start());
         match word {
             "replace" => Ok((rest, SetBlockKind::Replace)),
             "destroy" => Ok((rest, SetBlockKind::Destroy)),
@@ -553,7 +628,7 @@ impl CommandParse for MinecraftRange {
                 (None, None) => return Err(value),
             }
         } else {
-            let val = value.parse::<i32>().map_err(|_| value)?;
+            let val = word.parse::<i32>().map_err(|_| value)?;
             MinecraftRange::Equal(val)
         };
 
@@ -761,15 +836,19 @@ impl fmt::Display for SelectorArg {
 
 impl CommandParse for SelectorArg {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
-        let end_idx = s.find(',').or_else(|| s.find(']'));
+        let comma_end = s.find(',');
+        let bracket_end = s.find(']');
 
-        if let Some(end_idx) = end_idx {
-            let (arg, rest) = s.split_at(end_idx);
+        let end_idx = match (comma_end, bracket_end) {
+            (Some(c), Some(b)) => c.min(b),
+            (Some(c), None) => c,
+            (None, Some(b)) => b,
+            (None, None) => return Err(s),
+        };
 
-            Ok((rest, SelectorArg(arg.to_string())))
-        } else {
-            Err(s)
-        }
+        let (arg, rest) = s.split_at(end_idx);
+
+        Ok((rest, SelectorArg(arg.trim().to_string())))
     }
 }
 
