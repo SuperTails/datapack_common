@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use vfs::Directory;
 
 pub mod functions;
+pub mod vfs;
 
 pub struct Datapack {
     pub functions: Vec<Function>,

@@ -2,7 +2,7 @@ use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
-use vfs::{Directory, File};
+use crate::vfs::{Directory, File};
 
 pub mod command;
 pub mod command_components;
