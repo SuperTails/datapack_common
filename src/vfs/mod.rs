@@ -21,10 +21,10 @@ macro_rules! directories {
 
         $crate::directories_inner!( file_map, dir_map, $($rest)+ );
 
-        $crate::Directory::with_contents(dir_map, file_map)
+        $crate::vfs::Directory::with_contents(dir_map, file_map)
     }};
     () => {
-        $crate::Directory::new()
+        $crate::vfs::Directory::new()
     }
 
 }
@@ -53,7 +53,7 @@ macro_rules! directories_inner {
         $crate::directories_inner!($fname, $dname, $($rest)+);
     }};
     () => {
-        $crate::Directory::new()
+        $crate::vfs::Directory::new()
     };
 }
 
