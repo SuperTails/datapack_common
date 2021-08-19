@@ -137,7 +137,7 @@ fn get_functions_in_dir(
     }
 
     for (func_name, func) in dir.files.iter() {
-        let func_name = func_name.strip_suffix(".mcfunction").unwrap();
+        let func_name = func_name.strip_suffix(".mcfunction").unwrap_or_else(|| panic!("invalid function name {:?}", func_name));
 
         let id = format!("{}:{}{}", namespace, path_prefix, func_name);
         let func = parse_function(&id, &func.contents)?;
@@ -157,7 +157,9 @@ pub fn get_functions(dir: &Directory) -> Result<Vec<Function>, String> {
     let mut funcs = Vec::new();
 
     for (namespace, contents) in data_dir.directories.iter() {
-        funcs.extend(get_functions_in_dir(namespace, "", contents)?);
+        if let Some(contents) = contents.directories.get("functions") {
+            funcs.extend(get_functions_in_dir(namespace, "", contents)?);
+        }
     }
 
     Ok(funcs)
