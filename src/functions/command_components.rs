@@ -391,7 +391,7 @@ impl CommandParse for BlockSpec {
             Err(_) => (rest, SNbtCompound::default()),
         };
 
-        Ok((rest, BlockSpec { id, state, nbt }))
+        Ok((rest.trim_start(), BlockSpec { id, state, nbt }))
     }
 }
 

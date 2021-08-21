@@ -458,6 +458,8 @@ mod test {
         roundtrip_command(
             "execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{foo:1,bar:2}",
         );
+
+        roundtrip_command("execute if block ~ ~ ~ minecraft:air run kill @a");
     }
 
     #[test]
