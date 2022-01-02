@@ -1,5 +1,5 @@
-//! Virstual in-memory file system.
-//! might switch to a more sophisiticated model in the future
+//! Virtual in-memory file system.
+//! might switch to a more sophisticated model in the future
 use rustc_hash::FxHashMap;
 use std::io::prelude::*;
 use std::{
@@ -60,7 +60,7 @@ macro_rules! directories_inner {
 #[derive(Debug, Eq, PartialEq)]
 pub enum FsElement<'a> {
     File(&'a mut File),
-    Directoy(&'a mut Directory),
+    Directory(&'a mut Directory),
 }
 
 #[derive(Debug, Eq, PartialEq, Default)]
@@ -77,14 +77,14 @@ pub struct Directory {
 impl<'a> FsElement<'a> {
     pub fn persist(&self, name: &str, path: &Path) -> io::Result<()> {
         match self {
-            FsElement::Directoy(dir) => dir.persist(name, path),
+            FsElement::Directory(dir) => dir.persist(name, path),
             FsElement::File(file) => file.persist(name, path),
         }
     }
 
     pub fn dir(self) -> Option<&'a mut Directory> {
         match self {
-            FsElement::Directoy(dir) => Some(dir),
+            FsElement::Directory(dir) => Some(dir),
             FsElement::File(_) => None,
         }
     }
@@ -92,7 +92,7 @@ impl<'a> FsElement<'a> {
     pub fn file(self) -> Option<&'a mut File> {
         match self {
             FsElement::File(file) => Some(file),
-            FsElement::Directoy(_) => None,
+            FsElement::Directory(_) => None,
         }
     }
 }
@@ -159,7 +159,7 @@ impl Directory {
                     None
                 }
             }
-            None => Some(FsElement::Directoy(self)),
+            None => Some(FsElement::Directory(self)),
         }
     }
 
@@ -213,7 +213,7 @@ mod tests {
 
         let file = dir.resolve_path(&["foo"]).unwrap();
         match file {
-            FsElement::Directoy(_) => panic!(),
+            FsElement::Directory(_) => panic!(),
             FsElement::File(file) => assert_eq!(file.contents, "bar"),
         }
     }
@@ -228,7 +228,7 @@ mod tests {
 
         let file = dir.resolve_path(&["inner", "foo"]).unwrap();
         match file {
-            FsElement::Directoy(_) => panic!(),
+            FsElement::Directory(_) => panic!(),
             FsElement::File(file) => assert_eq!(file.contents, "bar"),
         }
     }

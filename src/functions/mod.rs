@@ -1,8 +1,8 @@
+use crate::vfs::{Directory, File};
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
-use crate::vfs::{Directory, File};
 
 pub mod command;
 pub mod command_components;
@@ -137,7 +137,9 @@ fn get_functions_in_dir(
     }
 
     for (func_name, func) in dir.files.iter() {
-        let func_name = func_name.strip_suffix(".mcfunction").unwrap_or_else(|| panic!("invalid function name {:?}", func_name));
+        let func_name = func_name
+            .strip_suffix(".mcfunction")
+            .unwrap_or_else(|| panic!("invalid function name {:?}", func_name));
 
         let id = format!("{}:{}{}", namespace, path_prefix, func_name);
         let func = parse_function(&id, &func.contents)?;
