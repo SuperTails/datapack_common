@@ -87,12 +87,15 @@ impl CommandParse for SNbt {
             let (rest, string) = parse_quoted(value)?;
             let snbt = SNbt(string.to_string());
             Ok((rest, snbt))
+        } else if value.starts_with('[') {
+            let (rest, list) = SNbtList::parse_from_command(value)?;
+            let snbt = SNbt(list.to_string());
+            Ok((rest, snbt))
         } else if let Ok((rest, v)) = i32::parse_from_command(value) {
             let snbt = SNbt(v.to_string());
             Ok((rest, snbt))
         } else {
             // TODO: Values that have a datatype suffix, like `42b`
-            // TODO: Lists
             Err(value)
         }
     }
@@ -141,6 +144,47 @@ impl CommandParse for SNbtCompound {
 
         let (rest, nbt) = find_balanced_bracket(value)?;
         Ok((rest, SNbtCompound(nbt.into())))
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct SNbtList(Vec<SNbt>);
+
+impl fmt::Display for SNbtList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        for (idx, elem) in self.0.iter().enumerate() {
+            write!(f, "{}", elem)?;
+            if idx != self.0.len() - 1 {
+                write!(f, ", ")?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+
+impl CommandParse for SNbtList {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        let mut rest = value.strip_prefix('[').ok_or(value)?;
+        rest = rest.trim_start();
+
+        let mut elems = Vec::new();
+
+        if !rest.starts_with(']') {
+            loop {
+                let (next_rest, elem) = SNbt::parse_from_command(rest)?;
+                elems.push(elem);
+                rest = next_rest.trim_start();
+                if let Some(next_rest) = rest.strip_prefix(',') {
+                    rest = next_rest.trim_start();
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        rest = rest.strip_prefix(']').ok_or(value)?;
+        Ok((rest, SNbtList(elems)))
     }
 }
 

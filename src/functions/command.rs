@@ -438,6 +438,9 @@ mod test {
         roundtrip_command("data get block 0 0 0 foo.bar.baz");
         roundtrip_command("data get entity @s foo.bar.baz 0.00115");
         roundtrip_command("data modify block 0 0 0 foo.bar.baz set value 90");
+        roundtrip_command("data modify block 0 0 0 foo.bar.baz set value []");
+        roundtrip_command("data modify block 0 0 0 foo.bar.baz set value [1, 2, 3]");
+        roundtrip_command("data modify block 0 0 0 foo.bar.baz set value [\"a\", \"bcd\", \"123ab\"]");
         roundtrip_command("data modify block 0 0 0 Command set value \"kill @a\"")
     }
 
