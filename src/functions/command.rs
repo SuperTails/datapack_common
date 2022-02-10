@@ -204,12 +204,13 @@ pub mod commands {
         pub kind: SetBlockKind,
     }
 
+    #[parse("summon $entity", pos=Optional(None), data=Optional(None))]
     #[parse("summon $entity $pos", data=Optional(None))]
     #[parse("summon $entity $pos $data")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Summon {
         pub entity: Entity,
-        pub pos: RelBlockPos,
+        pub pos: Optional<RelBlockPos>,
         pub data: Optional<SNbtCompound>,
     }
 
@@ -415,6 +416,7 @@ pub use execute_sub_commands::ExecuteSubCommand;
 mod test {
     use super::Command;
 
+    #[track_caller]
     fn roundtrip_command(val: &str) {
         let command: Command = val.parse().unwrap();
         let command_as_str = command.to_string();
@@ -557,6 +559,7 @@ mod test {
     #[test]
     fn test_summon() {
         roundtrip_command("summon entity 0 0 0 {\"data\":\"value\"}");
+        roundtrip_command("summon entity");
     }
 
     #[test]
