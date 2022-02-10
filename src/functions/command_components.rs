@@ -1007,11 +1007,11 @@ impl CommandParse for ScoreboardTarget {
     }
 }
 
-// TODO: more
 #[derive(Debug, PartialEq, Clone)]
 pub enum DataTarget {
     Block(RelBlockPos),
     Entity(Target),
+    Storage(StorageId),
 }
 
 impl fmt::Display for DataTarget {
@@ -1019,6 +1019,7 @@ impl fmt::Display for DataTarget {
         match self {
             DataTarget::Block(block) => write!(f, "block {}", block),
             DataTarget::Entity(target) => write!(f, "entity {}", target),
+            DataTarget::Storage(storage) => write!(f, "storage {}", storage),
         }
     }
 }
@@ -1034,6 +1035,10 @@ impl CommandParse for DataTarget {
             "entity" => {
                 let (rest, target) = Target::parse_from_command(rest)?;
                 Ok((rest, DataTarget::Entity(target)))
+            }
+            "storage" => {
+                let (rest, storage) = StorageId::parse_from_command(rest)?;
+                Ok((rest, DataTarget::Storage(storage)))
             }
             _ => Err(value),
         }
