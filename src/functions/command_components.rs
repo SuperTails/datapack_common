@@ -269,6 +269,14 @@ impl CommandParse for SNbtString {
             let rest = &rest[end_idx + 1..];
 
             Ok((rest, value))
+        } else if let Some(rest) = s.strip_prefix('\'') {
+            // TODO: Implement escapes
+            let end_idx = rest.find('\'').ok_or(s)?;
+
+            let value = SNbtString(rest[..end_idx].to_string());
+            let rest = &rest[end_idx + 1..];
+
+            Ok((rest, value))
         } else {
             let end_idx = s
                 .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
