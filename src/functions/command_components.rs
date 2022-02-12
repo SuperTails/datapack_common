@@ -73,7 +73,10 @@ pub enum SNbt {
     String(SNbtString),
     List(SNbtList),
     Compound(SNbtCompound),
+    Byte(i8),
+    Short(i16),
     Integer(i32),
+    Long(i64),
 }
 
 impl fmt::Display for SNbt {
@@ -82,8 +85,54 @@ impl fmt::Display for SNbt {
             SNbt::String(s) => s.fmt(f),
             SNbt::List(s) => s.fmt(f),
             SNbt::Compound(s) => s.fmt(f),
+            SNbt::Byte(s) => write!(f, "{}b", s),
+            SNbt::Short(s) => write!(f, "{}s", s),
             SNbt::Integer(s) => s.fmt(f),
+            SNbt::Long(s) => write!(f, "{}l", s),
         }
+    }
+}
+
+fn parse_integer_from_command<T>(s: &str, suffix: char) -> Result<(&str, T), &str>
+where
+    T: std::str::FromStr,
+{
+    let end_idx = if let Some(value_neg) = s.strip_prefix('-') {
+        value_neg
+            .find(|c: char| !c.is_digit(10))
+            .unwrap_or(value_neg.len())
+            + 1
+    } else {
+        s.find(|c: char| !c.is_digit(10)).unwrap_or(s.len())
+    };
+
+    let (value_str, rest) = s.split_at(end_idx);
+    let value = value_str.parse().map_err(|_| s)?;
+    let rest = rest.strip_prefix(suffix).ok_or(s)?;
+    Ok((rest, value))
+}
+
+fn parse_nbt_byte_from_command(s: &str) -> Result<(&str, i8), &str> {
+    if let Ok(result) = parse_integer_from_command(s, 'b') {
+        Ok(result)
+    } else {
+        parse_integer_from_command(s, 'B')
+    }
+}
+
+fn parse_nbt_short_from_command(s: &str) -> Result<(&str, i16), &str> {
+    if let Ok(result) = parse_integer_from_command(s, 's') {
+        Ok(result)
+    } else {
+        parse_integer_from_command(s, 'S')
+    }
+}
+
+fn parse_nbt_long_from_command(s: &str) -> Result<(&str, i64), &str> {
+    if let Ok(result) = parse_integer_from_command(s, 'l') {
+        Ok(result)
+    } else {
+        parse_integer_from_command(s, 'L')
     }
 }
 
@@ -92,8 +141,13 @@ impl CommandParse for SNbt {
         if value.starts_with('{') {
             let (rest, compound) = SNbtCompound::parse_from_command(value)?;
             Ok((rest, compound.into()))
+        } else if let Ok((rest, v)) = parse_nbt_byte_from_command(value) {
+            Ok((rest, v.into()))
+        } else if let Ok((rest, v)) = parse_nbt_short_from_command(value) {
+            Ok((rest, v.into()))
+        } else if let Ok((rest, v)) = parse_nbt_long_from_command(value) {
+            Ok((rest, v.into()))
         } else if let Ok((rest, v)) = i32::parse_from_command(value) {
-            // TODO: Values that have a datatype suffix, like `42b`
             Ok((rest, v.into()))
         } else if value.starts_with('[') {
             let (rest, list) = SNbtList::parse_from_command(value)?;
@@ -123,9 +177,27 @@ impl From<SNbtList> for SNbt {
     }
 }
 
+impl From<i8> for SNbt {
+    fn from(s: i8) -> Self {
+        Self::Byte(s)
+    }
+}
+
+impl From<i16> for SNbt {
+    fn from(s: i16) -> Self {
+        Self::Short(s)
+    }
+}
+
 impl From<i32> for SNbt {
     fn from(s: i32) -> Self {
         Self::Integer(s)
+    }
+}
+
+impl From<i64> for SNbt {
+    fn from(s: i64) -> Self {
+        Self::Long(s)
     }
 }
 
@@ -1264,6 +1336,11 @@ mod test {
         roundtrip_snbt("123");
         roundtrip_snbt("0");
         roundtrip_snbt("-42");
+        roundtrip_snbt("127b");
+        roundtrip_snbt("-128b");
+        roundtrip_snbt("32767s");
+        roundtrip_snbt("-32768s");
+        roundtrip_snbt("12339543845939439l");
     }
 
     #[test]
