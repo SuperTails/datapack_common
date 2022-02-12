@@ -440,7 +440,9 @@ mod test {
         roundtrip_command("data modify block 0 0 0 foo.bar.baz set value 90");
         roundtrip_command("data modify block 0 0 0 foo.bar.baz set value []");
         roundtrip_command("data modify block 0 0 0 foo.bar.baz set value [1, 2, 3]");
-        roundtrip_command("data modify block 0 0 0 foo.bar.baz set value [\"a\", \"bcd\", \"123ab\"]");
+        roundtrip_command(
+            "data modify block 0 0 0 foo.bar.baz set value [\"a\", \"bcd\", \"123ab\"]",
+        );
         roundtrip_command("data modify block 0 0 0 Command set value \"kill @a\"")
     }
 
@@ -461,7 +463,7 @@ mod test {
 
         // This test originally failed because of the `@e[tag=frameptr]` and the comma in the block SNBT.
         roundtrip_command(
-            "execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{foo:1,bar:2}",
+            "execute at @e[tag=frameptr] if block 0 0 0 minecraft:jukebox{bar: 2, foo: 1}",
         );
 
         roundtrip_command("execute if block ~ ~ ~ minecraft:air run kill @a");
@@ -555,13 +557,13 @@ mod test {
                 .to_string(),
             "setblock 0 0 0 block"
         );
-        roundtrip_command("setblock 0 0 0 minecraft:command_block{Command:\"kill @a\"}");
-        roundtrip_command("setblock 0 0 0 minecraft:command_block[conditional=true,facing=east]{Command:\"kill @e\"}");
+        roundtrip_command("setblock 0 0 0 minecraft:command_block{Command: \"kill @a\"}");
+        roundtrip_command("setblock 0 0 0 minecraft:command_block[conditional=true,facing=east]{Command: \"kill @e\"}");
     }
 
     #[test]
     fn test_summon() {
-        roundtrip_command("summon entity 0 0 0 {\"data\":\"value\"}");
+        roundtrip_command("summon entity 0 0 0 {data: \"value\"}");
         roundtrip_command("summon entity");
     }
 

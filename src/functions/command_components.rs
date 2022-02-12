@@ -12,7 +12,7 @@ use command_parser::{parse_command, parse_str, CommandParse};
 use itertools::Itertools;
 use serde_json::Deserializer;
 
-use super::{find_balanced_bracket, raw_text::TextComponent};
+use super::raw_text::TextComponent;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(String);
@@ -69,11 +69,21 @@ pub type DataType = String;
 pub type RelPos = String;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SNbt(String);
+pub enum SNbt {
+    String(SNbtString),
+    List(SNbtList),
+    Compound(SNbtCompound),
+    Integer(i32),
+}
 
 impl fmt::Display for SNbt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        match self {
+            SNbt::String(s) => s.fmt(f),
+            SNbt::List(s) => s.fmt(f),
+            SNbt::Compound(s) => s.fmt(f),
+            SNbt::Integer(s) => s.fmt(f),
+        }
     }
 }
 
@@ -81,69 +91,174 @@ impl CommandParse for SNbt {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
         if value.starts_with('{') {
             let (rest, compound) = SNbtCompound::parse_from_command(value)?;
-            let snbt = SNbt(compound.to_string());
-            Ok((rest, snbt))
-        } else if value.starts_with('"') {
-            let (rest, string) = parse_quoted(value)?;
-            let snbt = SNbt(string.to_string());
-            Ok((rest, snbt))
+            Ok((rest, compound.into()))
+        } else if let Ok((rest, v)) = i32::parse_from_command(value) {
+            // TODO: Values that have a datatype suffix, like `42b`
+            Ok((rest, v.into()))
         } else if value.starts_with('[') {
             let (rest, list) = SNbtList::parse_from_command(value)?;
-            let snbt = SNbt(list.to_string());
-            Ok((rest, snbt))
-        } else if let Ok((rest, v)) = i32::parse_from_command(value) {
-            let snbt = SNbt(v.to_string());
-            Ok((rest, snbt))
+            Ok((rest, list.into()))
         } else {
-            // TODO: Values that have a datatype suffix, like `42b`
-            Err(value)
+            let (rest, string) = SNbtString::parse_from_command(value)?;
+            Ok((rest, string.into()))
         }
     }
 }
 
-fn parse_quoted(s: &str) -> Result<(&str, &str), &str> {
-    // TODO: Actually implement escapes lol
-    if s.starts_with('"') {
-        let mut is_first = true;
-
-        let is_next_quote = |c: char| {
-            if is_first {
-                is_first = false;
-                false
-            } else {
-                c == '"'
-            }
-        };
-
-        let end_idx = s.find(is_next_quote).ok_or(s)? + 1;
-
-        let value = &s[..end_idx];
-        let rest = &s[end_idx..];
-
-        Ok((rest, value))
-    } else {
-        Err(s)
+impl From<SNbtString> for SNbt {
+    fn from(s: SNbtString) -> Self {
+        Self::String(s)
     }
 }
 
-// TODO: Proper nbt parsing
+impl From<SNbtCompound> for SNbt {
+    fn from(s: SNbtCompound) -> Self {
+        Self::Compound(s)
+    }
+}
+
+impl From<SNbtList> for SNbt {
+    fn from(s: SNbtList) -> Self {
+        Self::List(s)
+    }
+}
+
+impl From<i32> for SNbt {
+    fn from(s: i32) -> Self {
+        Self::Integer(s)
+    }
+}
+
+/// Strings in SNbt can be printed two ways:
+/// with quotes optional or with quotes required.
+/// (Quotes are always optional during parsing).
+///
+/// Quotes are optional when a string is used as the name of a tag, e.g.
+/// `{"foo":123}` is roundtripped as `{foo:123}`
+/// `{"foo bar":123}` is roundtripped as `{"foo bar": 123}`
+///
+/// Strings used as values always have quotes.
+///
+/// The Display impl will print them as quoted strings by default,
+/// but specifying the alternate mode `"{:#}"` will use quotes-optional mode
+///
+/// Note that quotes are always optional during parsing!
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct SNbtCompound(String);
+pub struct SNbtString(String);
+
+impl SNbtString {
+    pub fn needs_quotes(&self) -> bool {
+        self.0.is_empty()
+            || !self
+                .0
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+    }
+}
+
+impl Borrow<str> for SNbtString {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<SNbtString> for String {
+    fn from(s: SNbtString) -> Self {
+        s.0
+    }
+}
+
+/// See the doc comment for `SNbtString` for an explanation
+impl fmt::Display for SNbtString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() && !self.needs_quotes() {
+            write!(f, "{}", self.0)
+        } else {
+            // TODO: Minecraft will switch to using single quotes
+            // if the string contains a quote to avoid needing an escape
+
+            write!(f, "\"")?;
+            for c in self.0.escape_default() {
+                write!(f, "{}", c)?;
+            }
+            write!(f, "\"")
+        }
+    }
+}
+
+impl CommandParse for SNbtString {
+    fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
+        // TODO: Implement single-quoted strings
+        if let Some(rest) = s.strip_prefix('"') {
+            // TODO: Actually implement escapes lol
+            let end_idx = rest.find('"').ok_or(s)?;
+
+            let value = SNbtString(rest[..end_idx].to_string());
+            let rest = &rest[end_idx + 1..];
+
+            Ok((rest, value))
+        } else {
+            let end_idx = s
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
+                .unwrap_or(s.len());
+
+            let value = &s[..end_idx];
+            if value.is_empty() {
+                return Err(s);
+            }
+
+            let value = SNbtString(value.to_string());
+            let rest = &s[end_idx..];
+            Ok((rest, value))
+        }
+    }
+}
+
+/// This also uses the {:#} and {} distinction like SNbtString.
+/// {:#} will print nothing if the tag is empty.
+/// {} will print `{}` if the tag is empty
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct SNbtCompound(BTreeMap<SNbtString, SNbt>);
 
 impl fmt::Display for SNbtCompound {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        if f.alternate() && self.0.is_empty() {
+            Ok(())
+        } else {
+            write!(f, "{{")?;
+            for (idx, (name, tag)) in self.0.iter().enumerate() {
+                write!(f, "{:#}: {}", name, tag)?;
+                if idx < self.0.len() - 1 {
+                    write!(f, ", ")?;
+                }
+            }
+            write!(f, "}}")
+        }
     }
 }
 
 impl CommandParse for SNbtCompound {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        if !value.starts_with('{') {
-            return Err(value);
-        }
+        let mut data = BTreeMap::new();
 
-        let (rest, nbt) = find_balanced_bracket(value)?;
-        Ok((rest, SNbtCompound(nbt.into())))
+        let mut rest = value.trim_start().strip_prefix('{').ok_or(value)?;
+
+        while let Ok((next_rest, name)) = SNbtString::parse_from_command(rest) {
+            rest = next_rest.trim_start().strip_prefix(':').ok_or(value)?;
+            rest = rest.trim_start();
+            let (next_rest, tag) = SNbt::parse_from_command(rest)?;
+            rest = next_rest.trim_start();
+            data.insert(name, tag);
+
+            if let Some(next_rest) = rest.strip_prefix(',') {
+                rest = next_rest.trim_start();
+            } else {
+                break;
+            }
+        }
+        rest = rest.trim_start().strip_prefix('}').ok_or(value)?;
+
+        Ok((rest, SNbtCompound(data)))
     }
 }
 
@@ -182,7 +297,7 @@ impl CommandParse for SNbtList {
                 }
             }
         }
-        
+
         rest = rest.strip_prefix(']').ok_or(value)?;
         Ok((rest, SNbtList(elems)))
     }
@@ -418,7 +533,7 @@ pub struct BlockSpec {
 
 impl fmt::Display for BlockSpec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", self.id, self.state, self.nbt)
+        write!(f, "{}{}{:#}", self.id, self.state, self.nbt)
     }
 }
 
@@ -1095,7 +1210,7 @@ mod test {
 
     use crate::functions::command_components::Selector;
 
-    use super::{BlockState, Coord, ScoreOpKind};
+    use super::{BlockState, Coord, SNbt, ScoreOpKind};
 
     #[test]
     fn test_coord() {
@@ -1135,5 +1250,50 @@ mod test {
         assert_eq!(var.to_string(), "@a")
 
         // TODO: handle selector arguments
+    }
+
+    #[track_caller]
+    fn roundtrip_snbt(input: &str) {
+        let snbt = parse_command::<SNbt>(input).unwrap();
+        let output = snbt.to_string();
+        assert_eq!(input, output);
+    }
+
+    #[test]
+    fn test_snbt_integer() {
+        roundtrip_snbt("123");
+        roundtrip_snbt("0");
+        roundtrip_snbt("-42");
+    }
+
+    #[test]
+    fn test_snbt_list() {
+        roundtrip_snbt("[]");
+        roundtrip_snbt("[1, 2, 3]");
+        roundtrip_snbt("[\"a\", \"bcd\", \"123ab\"]");
+    }
+
+    #[test]
+    fn test_snbt_string() {
+        roundtrip_snbt("\"\"");
+        roundtrip_snbt("\"abc\"");
+        roundtrip_snbt("\"123\"");
+        roundtrip_snbt("\"foo 123 bar\"");
+        // TODO: It escapes the apostrophe when it doesn't need to
+        //roundtrip_snbt("\"apostr'phe\"");
+        // TODO: See comment in SNbtString::Display
+        // roundtrip_snbt("\'quo\"te\'");
+        // TODO: Escapes aren't done yet
+        // roundtrip_snbt("\"back\\slash\"");
+    }
+
+    #[test]
+    fn test_snbt_compound() {
+        roundtrip_snbt("{foo_bar123: 42}");
+        roundtrip_snbt("{}");
+        roundtrip_snbt("{\"foo 123\": \"bar\"}");
+        roundtrip_snbt("{tricky: \"{\"}");
+        roundtrip_snbt("{trickytoo: \"}\"}");
+        roundtrip_snbt("{x: {inner: 42}, y: [1, 2, 3], z: \"Hello, world!\"}");
     }
 }
