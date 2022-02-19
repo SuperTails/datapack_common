@@ -62,13 +62,13 @@ impl CommandParse for BlockId {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NbtPathPart {
     pub name: SNbtString,
-    pub index: Option<i32>,
+    pub indices: Vec<i32>,
 }
 
 impl fmt::Display for NbtPathPart {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:#}", self.name)?;
-        if let Some(index) = self.index {
+        for index in self.indices.iter() {
             write!(f, "[{}]", index)?;
         }
         Ok(())
@@ -77,28 +77,24 @@ impl fmt::Display for NbtPathPart {
 
 impl CommandParse for NbtPathPart {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
-        let (rest, name) = SNbtString::parse_from_command(s)?;
-        if let Some(rest) = rest.strip_prefix('[') {
-            let (rest, index) = i32::parse_from_command(rest)?;
-            let rest = rest.strip_prefix(']').ok_or(rest)?;
-            let component = Self {
-                name,
-                index: Some(index)
-            };
+        let (mut rest, name) = SNbtString::parse_from_command(s)?;
 
-            Ok((rest, component))
-        } else {
-            let component = Self {
-                name,
-                index: None
-            };
+        let mut indices = Vec::new();
 
-            Ok((rest, component))
+        while let Some(next_rest) = rest.strip_prefix('[') {
+            let (next_rest, index) = i32::parse_from_command(next_rest)?;
+            indices.push(index);
+            rest = next_rest.strip_prefix(']').ok_or(rest)?;
         }
+
+        let part = NbtPathPart { name, indices };
+        Ok((rest, part))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[serde(into = "String", try_from = "&str")]
 pub struct NbtPath(pub Vec<NbtPathPart>);
 
@@ -1383,7 +1379,7 @@ mod test {
 
     use crate::functions::command_components::Selector;
 
-    use super::{BlockState, Coord, SNbt, ScoreOpKind, NbtPath};
+    use super::{BlockState, Coord, NbtPath, SNbt, ScoreOpKind};
 
     #[test]
     fn test_coord() {
@@ -1487,6 +1483,7 @@ mod test {
         roundtrip_path("foo");
         roundtrip_path("foo[123]");
         roundtrip_path("foo.bar");
+        roundtrip_path("foo[123][45].bar");
         roundtrip_path("\"foo bar\"");
         roundtrip_path("\"spa ces\"[45].rest");
         roundtrip_path("lots[1].of[-5].\"ar rays\"[17]");
