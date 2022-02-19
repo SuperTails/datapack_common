@@ -118,6 +118,12 @@ impl CommandParse for NbtPath {
             return Err(s);
         }
 
+        // TODO: Remove this.
+        // This is a hacky workaround because the generated parser does not
+        // trim leading spaces, so number literals that follow an NBT path
+        // don't parse correctly.
+        let rest = rest.trim_start();
+
         Ok((rest, NbtPath(result)))
     }
 }
@@ -153,7 +159,6 @@ impl<'a> TryFrom<&'a str> for NbtPath {
 pub type StringNbt = String;
 pub type StorageId = String;
 pub type Entity = String;
-pub type DataPath = String;
 pub type DataType = String;
 pub type RelPos = String;
 

@@ -62,7 +62,7 @@ where
 pub mod commands {
     use crate::functions::{
         command_components::{
-            BlockSpec, CommentMessage, DataPath, DataTarget, Entity, FillBlockKind, JsonText,
+            BlockSpec, CommentMessage, DataTarget, Entity, FillBlockKind, JsonText, NbtPath,
             Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound, ScoreOpKind,
             ScoreboardTarget, Selector, SetBlockKind, Target,
         },
@@ -93,7 +93,7 @@ pub mod commands {
     #[derive(Debug, PartialEq, Clone)]
     pub struct DataGet {
         pub target: DataTarget,
-        pub path: DataPath,
+        pub path: NbtPath,
         pub scale: Optional<f64>,
     }
 
@@ -101,7 +101,7 @@ pub mod commands {
     #[derive(Debug, PartialEq, Clone)]
     pub struct DataModify {
         pub target: DataTarget,
-        pub path: DataPath,
+        pub path: NbtPath,
         pub kind: DataModifyKind,
     }
 
@@ -234,7 +234,7 @@ pub use commands::Command;
 
 #[parser]
 pub mod data_modify_kinds {
-    use crate::functions::command_components::{DataPath, DataTarget, SNbt};
+    use crate::functions::command_components::{DataTarget, NbtPath, SNbt};
 
     use super::Optional;
 
@@ -246,7 +246,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct AppendFrom {
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 
     #[parse("append value $value")]
@@ -261,7 +261,7 @@ pub mod data_modify_kinds {
     pub struct InsertFrom {
         pub index: i32,
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 
     #[parse("insert $index value $value")]
@@ -276,7 +276,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct MergeFrom {
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 
     #[parse("merge value $value")]
@@ -290,7 +290,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct PrependFrom {
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 
     #[parse("prepend value $value")]
@@ -304,7 +304,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct SetFrom {
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 
     #[parse("set value $value")]
@@ -317,7 +317,7 @@ pub mod data_modify_kinds {
     #[derive(Debug, PartialEq, Clone)]
     pub struct Remove {
         pub target: DataTarget,
-        pub source: Optional<DataPath>,
+        pub source: Optional<NbtPath>,
     }
 }
 
@@ -327,7 +327,7 @@ pub use data_modify_kinds::DataModifyKind;
 #[parser]
 pub mod execute_sub_commands {
     use crate::functions::command_components::{
-        BlockSpec, DataPath, DataTarget, DataType, MinecraftRange, Objective, RelBlockPos, RelPos,
+        BlockSpec, DataTarget, DataType, MinecraftRange, NbtPath, Objective, RelBlockPos, RelPos,
         ScoreboardComparison, Target,
     };
 
@@ -386,7 +386,7 @@ pub mod execute_sub_commands {
     pub struct StoreStorage {
         pub is_success: bool,
         pub target: DataTarget,
-        pub path: DataPath,
+        pub path: NbtPath,
         pub ty: DataType,
         pub scale: f64,
     }
