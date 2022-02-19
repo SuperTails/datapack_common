@@ -59,8 +59,101 @@ impl CommandParse for BlockId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NbtPathPart {
+    pub name: SNbtString,
+    pub index: Option<i32>,
+}
+
+impl fmt::Display for NbtPathPart {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:#}", self.name)?;
+        if let Some(index) = self.index {
+            write!(f, "[{}]", index)?;
+        }
+        Ok(())
+    }
+}
+
+impl CommandParse for NbtPathPart {
+    fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
+        let (rest, name) = SNbtString::parse_from_command(s)?;
+        if let Some(rest) = rest.strip_prefix('[') {
+            let (rest, index) = i32::parse_from_command(rest)?;
+            let rest = rest.strip_prefix(']').ok_or(rest)?;
+            let component = Self {
+                name,
+                index: Some(index)
+            };
+
+            Ok((rest, component))
+        } else {
+            let component = Self {
+                name,
+                index: None
+            };
+
+            Ok((rest, component))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "&str")]
+pub struct NbtPath(pub Vec<NbtPathPart>);
+
+impl CommandParse for NbtPath {
+    fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
+        let mut result = Vec::new();
+
+        let mut rest = s;
+
+        while let Ok((next_rest, part)) = NbtPathPart::parse_from_command(rest) {
+            rest = next_rest;
+            result.push(part);
+            if let Some(next_rest) = rest.strip_prefix('.') {
+                rest = next_rest;
+            } else {
+                break;
+            }
+        }
+
+        if result.is_empty() {
+            return Err(s);
+        }
+
+        Ok((rest, NbtPath(result)))
+    }
+}
+
+impl fmt::Display for NbtPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, c) in self.0.iter().enumerate() {
+            write!(f, "{}", c)?;
+            if i != self.0.len() - 1 {
+                write!(f, ".")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl From<NbtPath> for String {
+    fn from(p: NbtPath) -> Self {
+        p.to_string()
+    }
+}
+
+impl<'a> TryFrom<&'a str> for NbtPath {
+    type Error = &'a str;
+
+    fn try_from(s: &'a str) -> Result<Self, Self::Error> {
+        parse_command(s)
+    }
+}
+
 // ToDo
-pub type NbtPath = String;
 pub type StringNbt = String;
 pub type StorageId = String;
 pub type Entity = String;
@@ -216,7 +309,7 @@ impl From<i64> for SNbt {
 ///
 /// Note that quotes are always optional during parsing!
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct SNbtString(String);
+pub struct SNbtString(pub String);
 
 impl SNbtString {
     pub fn needs_quotes(&self) -> bool {
@@ -298,7 +391,7 @@ impl CommandParse for SNbtString {
 /// {:#} will print nothing if the tag is empty.
 /// {} will print `{}` if the tag is empty
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct SNbtCompound(BTreeMap<SNbtString, SNbt>);
+pub struct SNbtCompound(pub BTreeMap<SNbtString, SNbt>);
 
 impl fmt::Display for SNbtCompound {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -343,7 +436,7 @@ impl CommandParse for SNbtCompound {
 }
 
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct SNbtList(Vec<SNbt>);
+pub struct SNbtList(pub Vec<SNbt>);
 
 impl fmt::Display for SNbtList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1290,7 +1383,7 @@ mod test {
 
     use crate::functions::command_components::Selector;
 
-    use super::{BlockState, Coord, SNbt, ScoreOpKind};
+    use super::{BlockState, Coord, SNbt, ScoreOpKind, NbtPath};
 
     #[test]
     fn test_coord() {
@@ -1339,6 +1432,13 @@ mod test {
         assert_eq!(input, output);
     }
 
+    #[track_caller]
+    fn roundtrip_path(input: &str) {
+        let snbt = parse_command::<NbtPath>(input).unwrap();
+        let output = snbt.to_string();
+        assert_eq!(input, output);
+    }
+
     #[test]
     fn test_snbt_integer() {
         roundtrip_snbt("123");
@@ -1380,5 +1480,15 @@ mod test {
         roundtrip_snbt("{tricky: \"{\"}");
         roundtrip_snbt("{trickytoo: \"}\"}");
         roundtrip_snbt("{x: {inner: 42}, y: [1, 2, 3], z: \"Hello, world!\"}");
+    }
+
+    #[test]
+    fn test_path() {
+        roundtrip_path("foo");
+        roundtrip_path("foo[123]");
+        roundtrip_path("foo.bar");
+        roundtrip_path("\"foo bar\"");
+        roundtrip_path("\"spa ces\"[45].rest");
+        roundtrip_path("lots[1].of[-5].\"ar rays\"[17]");
     }
 }
