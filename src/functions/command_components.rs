@@ -59,9 +59,59 @@ impl CommandParse for BlockId {
     }
 }
 
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+pub struct NbtPathName(pub String);
+
+impl NbtPathName {
+    pub fn needs_quotes(&self) -> bool {
+        self.0.is_empty()
+            || !self
+                .0
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    }
+}
+
+impl Borrow<str> for NbtPathName {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<NbtPathName> for String {
+    fn from(s: NbtPathName) -> Self {
+        s.0
+    }
+}
+
+/// See the doc comment for `SNbtString` for an explanation
+impl fmt::Display for NbtPathName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_quotes() {
+            // TODO: Minecraft will switch to using single quotes
+            // if the string contains a quote to avoid needing an escape
+
+            write!(f, "\"")?;
+            for c in self.0.escape_default() {
+                write!(f, "{}", c)?;
+            }
+            write!(f, "\"")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
+impl CommandParse for NbtPathName {
+    fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
+        let (rest, s) = parse_nbt_string(s, false)?;
+        Ok((rest, NbtPathName(s)))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NbtPathPart {
-    pub name: SNbtString,
+    pub name: NbtPathName,
     pub indices: Vec<i32>,
 }
 
@@ -77,7 +127,7 @@ impl fmt::Display for NbtPathPart {
 
 impl CommandParse for NbtPathPart {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
-        let (mut rest, name) = SNbtString::parse_from_command(s)?;
+        let (mut rest, name) = NbtPathName::parse_from_command(s)?;
 
         let mut indices = Vec::new();
 
@@ -295,6 +345,44 @@ impl From<i64> for SNbt {
     }
 }
 
+/// If `allow_dots` is false, this will stop parsing
+/// when an *unquoted* `'.'` is reached.
+/// Note that dots in a quoted string are ignored!
+pub fn parse_nbt_string(s: &str, allow_dots: bool) -> Result<(&str, String), &str> {
+    if let Some(rest) = s.strip_prefix('"') {
+        // TODO: Actually implement escapes lol
+        let end_idx = rest.find('"').ok_or(s)?;
+
+        let value = rest[..end_idx].to_string();
+        let rest = &rest[end_idx + 1..];
+
+        Ok((rest, value))
+    } else if let Some(rest) = s.strip_prefix('\'') {
+        // TODO: Implement escapes
+        let end_idx = rest.find('\'').ok_or(s)?;
+
+        let value = rest[..end_idx].to_string();
+        let rest = &rest[end_idx + 1..];
+
+        Ok((rest, value))
+    } else {
+        let end_idx = s
+            .find(|c: char| {
+                !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || (allow_dots && c == '.'))
+            })
+            .unwrap_or(s.len());
+
+        let value = &s[..end_idx];
+        if value.is_empty() {
+            return Err(s);
+        }
+
+        let value = value.to_string();
+        let rest = &s[end_idx..];
+        Ok((rest, value))
+    }
+}
+
 /// Strings in SNbt can be printed two ways:
 /// with quotes optional or with quotes required.
 /// (Quotes are always optional during parsing).
@@ -354,37 +442,8 @@ impl fmt::Display for SNbtString {
 
 impl CommandParse for SNbtString {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
-        // TODO: Implement single-quoted strings
-        if let Some(rest) = s.strip_prefix('"') {
-            // TODO: Actually implement escapes lol
-            let end_idx = rest.find('"').ok_or(s)?;
-
-            let value = SNbtString(rest[..end_idx].to_string());
-            let rest = &rest[end_idx + 1..];
-
-            Ok((rest, value))
-        } else if let Some(rest) = s.strip_prefix('\'') {
-            // TODO: Implement escapes
-            let end_idx = rest.find('\'').ok_or(s)?;
-
-            let value = SNbtString(rest[..end_idx].to_string());
-            let rest = &rest[end_idx + 1..];
-
-            Ok((rest, value))
-        } else {
-            let end_idx = s
-                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.'))
-                .unwrap_or(s.len());
-
-            let value = &s[..end_idx];
-            if value.is_empty() {
-                return Err(s);
-            }
-
-            let value = SNbtString(value.to_string());
-            let rest = &s[end_idx..];
-            Ok((rest, value))
-        }
+        let (rest, s) = parse_nbt_string(s, true)?;
+        Ok((rest, SNbtString(s)))
     }
 }
 
@@ -1433,13 +1492,6 @@ mod test {
         assert_eq!(input, output);
     }
 
-    #[track_caller]
-    fn roundtrip_path(input: &str) {
-        let snbt = parse_command::<NbtPath>(input).unwrap();
-        let output = snbt.to_string();
-        assert_eq!(input, output);
-    }
-
     #[test]
     fn test_snbt_integer() {
         roundtrip_snbt("123");
@@ -1483,14 +1535,28 @@ mod test {
         roundtrip_snbt("{x: {inner: 42}, y: [1, 2, 3], z: \"Hello, world!\"}");
     }
 
+    #[track_caller]
+    fn split_path(input: &str, expected: &[&str]) {
+        let snbt = parse_command::<NbtPath>(input).unwrap();
+        let output = snbt
+            .0
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(&output, expected);
+    }
+
     #[test]
     fn test_path() {
-        roundtrip_path("foo");
-        roundtrip_path("foo[123]");
-        roundtrip_path("foo.bar");
-        roundtrip_path("foo[123][45].bar");
-        roundtrip_path("\"foo bar\"");
-        roundtrip_path("\"spa ces\"[45].rest");
-        roundtrip_path("lots[1].of[-5].\"ar rays\"[17]");
+        split_path("foo", &["foo"]);
+        split_path("foo[123]", &["foo[123]"]);
+        split_path("foo.bar", &["foo", "bar"]);
+        split_path("foo[123][45].bar", &["foo[123][45]", "bar"]);
+        split_path("\"has.dot\"", &["\"has.dot\""]);
+        split_path("\"spa ces\"[45].rest", &["\"spa ces\"[45]", "rest"]);
+        split_path(
+            "lots[1].of[-5].\"ar rays\"[17]",
+            &["lots[1]", "of[-5]", "\"ar rays\"[17]"],
+        );
     }
 }
