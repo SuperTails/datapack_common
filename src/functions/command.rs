@@ -371,6 +371,15 @@ pub mod execute_sub_commands {
         pub block: BlockSpec,
     }
 
+    #[parse("if data $target $path", is_unless = false)]
+    #[parse("unless data $target $path", is_unless = true)]
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct IfData {
+        pub is_unless: bool,
+        pub target: DataTarget,
+        pub path: NbtPath,
+    }
+
     #[parse("store result score $target $target_obj", is_success = false)]
     #[parse("store success score $target $target_obj", is_success = true)]
     #[derive(Debug, Clone, PartialEq)]
@@ -467,6 +476,8 @@ mod test {
         );
 
         roundtrip_command("execute if block ~ ~ ~ minecraft:air run kill @a");
+
+        roundtrip_command("execute if data storage test:foo bar.baz run kill @a");
     }
 
     #[test]
