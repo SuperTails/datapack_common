@@ -160,6 +160,21 @@ pub mod commands {
     #[derive(Debug, PartialEq, Clone)]
     pub struct ObjRemove(pub Objective);
 
+    #[parse("schedule function $id $delay append", replace = false)]
+    #[parse("schedule function $id $delay", replace = true)]
+    #[derive(Debug, PartialEq, Clone)]
+    pub struct Schedule {
+        pub id: FunctionIdent,
+        // TODO: This allows appending "d" "s" or "t" suffixes
+        // (Also it should be unsigned)
+        pub delay: i32,
+        pub replace: bool,
+    }
+
+    #[parse("schedule clear $0")]
+    #[derive(Debug, PartialEq, Clone)]
+    pub struct ScheduleClear(pub FunctionIdent);
+
     #[parse("scoreboard players add $target $target_obj $score", remove = false)]
     #[parse("scoreboard players remove $target $target_obj $score", remove = true)]
     #[derive(Debug, PartialEq, Clone)]
@@ -506,6 +521,13 @@ mod test {
     #[test]
     fn test_obj_add() {
         roundtrip_command("scoreboard objectives add my_scoreboard dummy");
+    }
+
+    #[test]
+    fn test_schedule() {
+        roundtrip_command("schedule function foo:bar 1 append");
+        roundtrip_command("schedule function baz:quux 123 replace");
+        roundtrip_command("schedule clear biz:baz");
     }
 
     #[test]
