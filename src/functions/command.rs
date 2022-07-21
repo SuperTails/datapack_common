@@ -524,6 +524,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_schedule() {
         roundtrip_command("schedule function foo:bar 1 append");
         roundtrip_command("schedule function baz:quux 123 replace");

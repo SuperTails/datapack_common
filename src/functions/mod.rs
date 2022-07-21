@@ -12,39 +12,6 @@ pub use command::Command;
 
 use self::command_components::FunctionIdent;
 
-/// splits the string at the closing bracket
-fn find_balanced_bracket(value: &str) -> Result<(&str, &str), &str> {
-    let opening_bracket = value.chars().next().ok_or(value)?;
-    let closing_bracket = match opening_bracket {
-        '(' => ')',
-        '[' => ']',
-        '{' => '}',
-        _ => return Err(value),
-    };
-
-    let mut end_idx = None;
-    let mut depth = 0_u32;
-    let mut chars = value.char_indices();
-    for (index, char) in &mut chars {
-        if char == opening_bracket {
-            depth += 1;
-        } else if char == closing_bracket {
-            depth -= 1;
-            if depth == 0 {
-                end_idx = Some(index);
-                break;
-            }
-        }
-    }
-
-    if let Some(end_idx) = end_idx {
-        let rest = chars.as_str();
-        Ok((rest, &value[..=end_idx]))
-    } else {
-        Err(value)
-    }
-}
-
 /// Represents a single function and its contents in a datapack
 #[derive(Debug, Clone)]
 pub struct Function {
@@ -169,7 +136,8 @@ pub fn get_functions(dir: &Directory) -> Result<Vec<Function>, String> {
 
 fn get_func_file<'a>(id: &FunctionIdent, root_dir: &'a mut Directory) -> &'a mut File {
     let data_dir = root_dir.dir("data".to_owned());
-    let namespace_dir = data_dir.dir((&*id.namespace).to_owned());
+    let ns_dir = data_dir.dir((&*id.namespace).to_owned());
+    let namespace_dir = ns_dir.dir("functions".to_owned());
 
     let mut func_dir = namespace_dir;
     let path = id.path.split('/').collect::<Vec<&str>>();

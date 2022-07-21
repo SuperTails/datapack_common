@@ -102,6 +102,11 @@ impl File {
         Self::default()
     }
 
+    pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = std::fs::read_to_string(path)?;
+        Ok(Self::with_data(contents))
+    }
+
     pub fn with_data(data: String) -> Self {
         File { contents: data }
     }
@@ -126,6 +131,33 @@ impl File {
 impl Directory {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let dir = std::fs::read_dir(path)?;
+        
+        let mut directories = FxHashMap::default();
+        let mut files = FxHashMap::default();
+
+        for obj in dir {
+            let obj = obj?;
+            
+            let name = obj.file_name();
+            let name = name.to_str().unwrap().to_string();
+
+            let file_type = obj.file_type()?;
+            if file_type.is_dir() {
+                let subdir = Directory::open(&obj.path())?;
+                directories.insert(name, subdir);
+            } else if file_type.is_file() {
+                let subfile = File::open(&obj.path())?;
+                files.insert(name, subfile);
+            } else {
+                todo!()
+            }
+        }
+
+        Ok(Directory::with_contents(directories, files))
     }
 
     pub fn with_contents(

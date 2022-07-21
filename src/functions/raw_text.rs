@@ -124,9 +124,9 @@ pub struct TextComponent {
 }
 
 impl TextComponent {
-    pub fn as_string<F>(&self, scores: &F) -> Result<String, String>
+    pub fn as_string<F>(&self, scores: &mut F) -> Result<String, String>
     where
-        F: Fn(&ScoreHolder, &Objective) -> Option<i32>,
+        F: FnMut(&ScoreHolder, &Objective) -> Option<i32>,
     {
         let mut result = if let Some(text) = &self.text {
             text.clone()

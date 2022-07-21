@@ -1,7 +1,7 @@
 //! This file contains various components used in minecrafts commands
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, Cow},
     collections::BTreeMap,
     convert::{AsRef, TryFrom},
     fmt,
@@ -105,7 +105,7 @@ impl fmt::Display for NbtPathName {
 impl CommandParse for NbtPathName {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
         let (rest, s) = parse_nbt_string(s, false)?;
-        Ok((rest, NbtPathName(s)))
+        Ok((rest, NbtPathName(s.into_owned())))
     }
 }
 
@@ -243,11 +243,11 @@ where
 {
     let end_idx = if let Some(value_neg) = s.strip_prefix('-') {
         value_neg
-            .find(|c: char| !c.is_digit(10))
+            .find(|c: char| !c.is_ascii_digit())
             .unwrap_or(value_neg.len())
             + 1
     } else {
-        s.find(|c: char| !c.is_digit(10)).unwrap_or(s.len())
+        s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len())
     };
 
     let (value_str, rest) = s.split_at(end_idx);
@@ -348,15 +348,41 @@ impl From<i64> for SNbt {
 /// If `allow_dots` is false, this will stop parsing
 /// when an *unquoted* `'.'` is reached.
 /// Note that dots in a quoted string are ignored!
-pub fn parse_nbt_string(s: &str, allow_dots: bool) -> Result<(&str, String), &str> {
+pub fn parse_nbt_string(s: &str, allow_dots: bool) -> Result<(&str, Cow<str>), &str> {
     if let Some(rest) = s.strip_prefix('"') {
-        // TODO: Actually implement escapes lol
-        let end_idx = rest.find('"').ok_or(s)?;
+        let mut result: Option<String> = None;
 
-        let value = rest[..end_idx].to_string();
-        let rest = &rest[end_idx + 1..];
+        let mut end_idx: Option<usize> = None;
 
-        Ok((rest, value))
+        let mut is_escaped = false;
+
+        for (idx, c) in rest.char_indices() {
+            if is_escaped {
+                is_escaped = false;
+                result.as_mut().unwrap().push(c);
+            } else if c == '\\' {
+                is_escaped = true;
+                if result.is_none() {
+                    result = Some(rest[..idx].to_string())
+                }
+            } else if c == '"' {
+                end_idx = Some(idx);
+                break;
+            } else if let Some(result) = &mut result {
+                result.push(c);
+            }
+        }
+
+        if let Some(end_idx) = end_idx {
+            let value = if let Some(result) = result {
+                Cow::Owned(result)
+            } else {
+                Cow::Borrowed(&rest[..end_idx])
+            };
+            Ok((&rest[end_idx + 1..], value))
+        } else {
+            Err(s)
+        }
     } else if let Some(rest) = s.strip_prefix('\'') {
         // TODO: Implement escapes
         let end_idx = rest.find('\'').ok_or(s)?;
@@ -364,7 +390,7 @@ pub fn parse_nbt_string(s: &str, allow_dots: bool) -> Result<(&str, String), &st
         let value = rest[..end_idx].to_string();
         let rest = &rest[end_idx + 1..];
 
-        Ok((rest, value))
+        Ok((rest, value.into()))
     } else {
         let end_idx = s
             .find(|c: char| {
@@ -379,7 +405,7 @@ pub fn parse_nbt_string(s: &str, allow_dots: bool) -> Result<(&str, String), &st
 
         let value = value.to_string();
         let rest = &s[end_idx..];
-        Ok((rest, value))
+        Ok((rest, value.into()))
     }
 }
 
@@ -443,7 +469,7 @@ impl fmt::Display for SNbtString {
 impl CommandParse for SNbtString {
     fn parse_from_command(s: &str) -> Result<(&str, Self), &str> {
         let (rest, s) = parse_nbt_string(s, true)?;
-        Ok((rest, SNbtString(s)))
+        Ok((rest, SNbtString(s.into_owned())))
     }
 }
 
@@ -1522,7 +1548,7 @@ mod test {
         // TODO: See comment in SNbtString::Display
         // roundtrip_snbt("\'quo\"te\'");
         // TODO: Escapes aren't done yet
-        // roundtrip_snbt("\"back\\slash\"");
+        roundtrip_snbt(r#""back\\slash""#);
     }
 
     #[test]
