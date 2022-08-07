@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::command_components::{
-    NbtPath, Objective, RelBlockPos, ScoreHolder, Selector, StorageId, StringNbt,
+    NbtPath, Objective, RelBlockPos, SNbt, ScoreHolder, Selector, StorageId, StringNbt,
 };
 use command_parser::CommandParse;
 use serde::{Deserialize, Serialize};
@@ -10,25 +10,21 @@ use serde_with::skip_serializing_none;
 
 #[derive(Default)]
 pub struct TextBuilder {
-    inner: Option<Vec<TextComponent>>,
+    inner: Option<Vec<CompoundTextComponent>>,
 }
 
 impl TextBuilder {
-    fn innermost(&mut self) -> Option<&mut TextComponent> {
+    fn innermost(&mut self) -> Option<&mut CompoundTextComponent> {
         self.inner
             .as_mut()
             .map(|i| i.last_mut().unwrap().innermost())
     }
 
     fn push_component(&mut self) {
-        *self.next_component() = Some(vec![Default::default()])
-    }
-
-    fn next_component(&mut self) -> &mut Option<Vec<TextComponent>> {
         if self.inner.is_none() {
-            &mut self.inner
+            self.inner = Some(vec![Default::default()]);
         } else {
-            &mut self.innermost().unwrap().extra
+            self.innermost().unwrap().extra = Some(vec![JsonText::Compound(Default::default())]);
         }
     }
 
@@ -36,11 +32,16 @@ impl TextBuilder {
         Default::default()
     }
 
-    pub fn build(&mut self) -> Vec<TextComponent> {
-        self.inner
+    pub fn build(&mut self) -> JsonText {
+        let parts: Vec<JsonText> = self
+            .inner
             .as_ref()
             .expect("tried to build empty `TextComponent`")
-            .clone()
+            .iter()
+            .map(|c| JsonText::Compound(Box::new(c.clone())))
+            .collect();
+
+        JsonText::List(parts)
     }
 
     pub fn color(&mut self, color: Color) -> &mut Self {
@@ -84,10 +85,58 @@ impl TextBuilder {
     }
 }
 
+#[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonText {
+    Bool(bool),
+    String(String),
+    List(Vec<JsonText>),
+    Compound(Box<CompoundTextComponent>),
+    // TODO: Raw number variants
+}
+
+impl fmt::Display for JsonText {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        serde_json::to_string(self).unwrap().fmt(f)
+    }
+}
+
+impl CommandParse for JsonText {
+    fn parse_from_command(mut value: &str) -> Result<(&str, Self), &str> {
+        value = value.trim_start();
+
+        let mut d = Deserializer::from_str(value).into_iter::<JsonText>();
+        let components = d.next().ok_or(value)?.map_err(|err| {
+            println!("{:?}", err);
+            value
+        })?;
+        let rest = &value[d.byte_offset()..];
+        Ok((rest, components))
+    }
+}
+
+impl JsonText {
+    pub fn as_string<F, FS>(&self, scores: &mut F, storage_nbt: &mut FS) -> Result<String, String>
+    where
+        F: FnMut(&ScoreHolder, &Objective) -> Option<i32>,
+        FS: FnMut(&StorageId, &NbtPath) -> Option<SNbt>,
+    {
+        match self {
+            JsonText::Bool(b) => Ok(b.to_string()),
+            JsonText::String(s) => Ok(s.clone()),
+            JsonText::List(a) => a
+                .iter()
+                .map(|t| t.as_string(scores, storage_nbt))
+                .collect::<Result<String, String>>(),
+            JsonText::Compound(c) => c.as_string(scores, storage_nbt),
+        }
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct TextComponent {
+pub struct CompoundTextComponent {
     // --- Content tags ---
     pub text: Option<String>,
     pub translate: Option<String>,
@@ -106,7 +155,7 @@ pub struct TextComponent {
     pub storage: Option<StorageId>,
 
     // --- Child component ---
-    pub extra: Option<Vec<TextComponent>>,
+    pub extra: Option<Vec<JsonText>>,
 
     // --- Formatting ---
     pub color: Option<Color>,
@@ -123,10 +172,19 @@ pub struct TextComponent {
     pub hover_event: Option<Box<HoverEvent>>,
 }
 
-impl TextComponent {
-    pub fn as_string<F>(&self, scores: &mut F) -> Result<String, String>
+pub fn empty_score_getter(_holder: &ScoreHolder, _obj: &Objective) -> Option<i32> {
+    None
+}
+
+pub fn empty_storage_nbt_getter(_storage_id: &StorageId, _path: &NbtPath) -> Option<SNbt> {
+    None
+}
+
+impl CompoundTextComponent {
+    pub fn as_string<F, FS>(&self, scores: &mut F, storage_nbt: &mut FS) -> Result<String, String>
     where
         F: FnMut(&ScoreHolder, &Objective) -> Option<i32>,
+        FS: FnMut(&StorageId, &NbtPath) -> Option<SNbt>,
     {
         let mut result = if let Some(text) = &self.text {
             text.clone()
@@ -143,7 +201,7 @@ impl TextComponent {
             } else if let Some(v) = scores(name, objective) {
                 v
             } else {
-                todo!("how to print undefined score {}", name)
+                todo!("how to print undefined score?")
             };
 
             result.to_string()
@@ -152,38 +210,68 @@ impl TextComponent {
         } else if let Some(keybind) = &self.keybind {
             todo!("{:?}", keybind)
         } else if let Some(nbt) = &self.nbt {
-            todo!("{:?}", nbt)
+            let snbt = if let Some(storage) = &self.storage {
+                storage_nbt(storage, nbt)
+            } else if let Some(entity) = &self.entity {
+                todo!("nbt on entity {:?}", entity)
+            } else if let Some(block) = &self.block {
+                todo!("nbt on block {:?}", block)
+            } else {
+                return Err(
+                    "nbt CompoundTextComponent did not have storage, entity, or block specified"
+                        .to_string(),
+                );
+            };
+
+            if let Some(snbt) = snbt {
+                let interpret = self.interpret.unwrap_or(false);
+                if interpret {
+                    let text = snbt.to_string();
+                    let text: JsonText = command_parser::parse_command(&text)
+                        .map_err(|e| format!("invalid interpreted nbt {:?}", e))?;
+                    text.as_string(scores, storage_nbt)?
+                } else {
+                    snbt.to_string()
+                }
+            } else {
+                todo!("how to print undefined nbt?")
+            }
         } else {
-            panic!("no content tags in `TextComponent`")
+            panic!("no content tags in `CompoundTextComponent`")
         };
 
         if let Some(extra) = &self.extra {
             for ex in extra {
-                result.push_str(&ex.as_string(scores)?);
+                result.push_str(&ex.as_string(scores, storage_nbt)?);
             }
         }
 
         Ok(result)
     }
 
-    fn innermost(&mut self) -> &mut TextComponent {
-        if self.extra.is_some() {
-            self.extra.as_mut().unwrap().last_mut().unwrap().innermost()
+    fn innermost(&mut self) -> &mut CompoundTextComponent {
+        if self.extra.is_some() && !self.extra.as_ref().unwrap().is_empty() {
+            let extra = self.extra.as_mut().unwrap();
+            if let JsonText::Compound(extra) = extra.last_mut().unwrap() {
+                extra.innermost()
+            } else {
+                panic!();
+            }
         } else {
             self
         }
     }
 }
 
-impl fmt::Display for TextComponent {
+impl fmt::Display for CompoundTextComponent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
     }
 }
 
-impl CommandParse for TextComponent {
+impl CommandParse for CompoundTextComponent {
     fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
-        let mut stream = Deserializer::from_str(value).into_iter::<TextComponent>();
+        let mut stream = Deserializer::from_str(value).into_iter::<CompoundTextComponent>();
         let component = stream.next().ok_or(value)?.map_err(|_| value)?;
         let rest = &value[stream.byte_offset()..];
         Ok((rest, component))
@@ -216,14 +304,14 @@ impl From<Color> for String {
 #[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", content = "contents", rename_all = "snake_case")]
 pub enum HoverEvent {
-    ShowText(TextComponent),
+    ShowText(JsonText),
     ShowItem {
         id: String,
         count: Option<usize>,
         tag: Option<StringNbt>,
     },
     ShowEntity {
-        name: Option<TextComponent>,
+        name: Option<JsonText>,
         #[serde(rename = "type")]
         ty: String,
         id: String,
@@ -278,7 +366,67 @@ pub struct ScoreComponent {
 
 #[cfg(test)]
 mod test {
-    use super::Color;
+    use super::{empty_score_getter, empty_storage_nbt_getter, Color, JsonText, TextBuilder};
+
+    #[test]
+    fn eval_list_of_compound() {
+        let text = TextBuilder::new()
+            .append_text("foo".to_string())
+            .append_text("bar".to_string())
+            .build();
+
+        let output = text
+            .as_string(&mut empty_score_getter, &mut empty_storage_nbt_getter)
+            .unwrap();
+        assert_eq!(output, "foobar");
+    }
+
+    #[test]
+    fn eval_string() {
+        let text = r#""a""#;
+        let text: JsonText = command_parser::parse_command(text).unwrap();
+
+        let output = text
+            .as_string(&mut empty_score_getter, &mut empty_storage_nbt_getter)
+            .unwrap();
+        assert_eq!(output, "a");
+    }
+
+    #[test]
+    fn eval_list_of_string() {
+        let text = r#"["a", "b", ["c", "d"]]"#;
+        let text: JsonText = command_parser::parse_command(text).unwrap();
+
+        let output = text
+            .as_string(&mut empty_score_getter, &mut empty_storage_nbt_getter)
+            .unwrap();
+        assert_eq!(output, "abcd");
+    }
+
+    #[test]
+    fn list_serialize() {
+        let text = TextBuilder::new().append_text("foobar".to_string()).build();
+
+        let output = serde_json::to_string(&text).unwrap();
+        assert_eq!(output, r#"[{"text":"foobar"}]"#);
+    }
+
+    #[test]
+    fn list_deserialize() {
+        let text = TextBuilder::new().append_text("foobar".to_string()).build();
+
+        let output: JsonText = serde_json::from_str(r#"[{"text":"foobar"}]"#).unwrap();
+
+        assert_eq!(output, text);
+    }
+
+    #[test]
+    fn string_roundtrip() {
+        let before = r#"["a",["b","c"]]"#;
+        let mid: JsonText = serde_json::from_str(before).unwrap();
+        let after = serde_json::to_string(&mid).unwrap();
+        assert_eq!(before, after);
+    }
 
     #[test]
     fn color_serialize() {

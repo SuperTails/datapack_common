@@ -62,9 +62,9 @@ where
 pub mod commands {
     use crate::functions::{
         command_components::{
-            BlockSpec, CommentMessage, DataTarget, Entity, FillBlockKind, JsonText, NbtPath,
-            Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound, ScoreOpKind,
-            ScoreboardTarget, Selector, SetBlockKind, Target,
+            BlockSpec, CloneFilterKind, CommentMessage, DataTarget, Entity, FillBlockKind,
+            JsonText, NbtPath, Objective, ObjectiveCriterion, RelBlockPos, SNbtCompound,
+            ScoreOpKind, ScoreboardTarget, Selector, SetBlockKind, Target,
         },
         FunctionIdent,
     };
@@ -74,12 +74,14 @@ pub mod commands {
     #[derive(Debug, PartialEq, Clone)]
     pub enum Command {}
 
-    #[parse("clone $start $end $dest")]
+    #[parse("clone $start $end $dest", filter=CloneFilterKind::Replace)]
+    #[parse("clone $start $end $dest $filter")]
     #[derive(Debug, PartialEq, Clone)]
     pub struct Clone {
         pub start: RelBlockPos,
         pub end: RelBlockPos,
         pub dest: RelBlockPos,
+        pub filter: CloneFilterKind,
     }
 
     #[parse("$msg")]
@@ -611,5 +613,6 @@ mod test {
     fn test_tellraw() {
         roundtrip_command(r#"tellraw @a {"text":"Hello"}"#);
         roundtrip_command(r#"tellraw @a [{"text":"Hello"},{"text":"World"}]"#);
+        roundtrip_command(r#"tellraw @a ["a",{"text":"Hello"}]"#)
     }
 }

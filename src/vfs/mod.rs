@@ -135,13 +135,13 @@ impl Directory {
 
     pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let dir = std::fs::read_dir(path)?;
-        
+
         let mut directories = FxHashMap::default();
         let mut files = FxHashMap::default();
 
         for obj in dir {
             let obj = obj?;
-            
+
             let name = obj.file_name();
             let name = name.to_str().unwrap().to_string();
 

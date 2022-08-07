@@ -10,9 +10,8 @@ use std::{
 
 use command_parser::{parse_command, parse_str, CommandParse};
 use itertools::Itertools;
-use serde_json::Deserializer;
 
-use super::raw_text::TextComponent;
+pub use super::raw_text::JsonText;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(String);
@@ -458,8 +457,15 @@ impl fmt::Display for SNbtString {
             // if the string contains a quote to avoid needing an escape
 
             write!(f, "\"")?;
-            for c in self.0.escape_default() {
-                write!(f, "{}", c)?;
+            for c in self.0.chars() {
+                // Doesn't need escaping
+                if c == '\'' {
+                    write!(f, "'")?;
+                } else {
+                    for c in c.escape_default() {
+                        write!(f, "{}", c)?;
+                    }
+                }
             }
             write!(f, "\"")
         }
@@ -580,42 +586,6 @@ impl CommandParse for CommentMessage {
         let new_line_idx = value.find('\n').unwrap_or(value.len());
         let (new_line, rest) = value.split_at(new_line_idx);
         Ok((rest, CommentMessage(new_line.to_string())))
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct JsonText {
-    pub components: Vec<TextComponent>,
-}
-
-impl fmt::Display for JsonText {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.components.as_slice() {
-            [single] => write!(f, "{}", serde_json::to_string(single).unwrap()),
-            other => write!(f, "{}", serde_json::to_string(other).unwrap()),
-        }
-    }
-}
-
-impl CommandParse for JsonText {
-    fn parse_from_command(mut value: &str) -> Result<(&str, Self), &str> {
-        value = value.trim_start();
-
-        let (rest, components) = if value.starts_with('[') {
-            let mut stream = Deserializer::from_str(value).into_iter::<Vec<TextComponent>>();
-            let components = stream.next().ok_or(value)?.map_err(|_| value)?;
-            let rest = &value[stream.byte_offset()..];
-            (rest, components)
-        } else {
-            let mut stream = Deserializer::from_str(value).into_iter::<TextComponent>();
-            let component = stream.next().ok_or(value)?.map_err(|_| value)?;
-            let rest = &value[stream.byte_offset()..];
-            (rest, vec![component])
-        };
-
-        let result = JsonText { components };
-
-        Ok((rest, result))
     }
 }
 
@@ -848,6 +818,32 @@ impl CommandParse for FillBlockKind {
             "keep" => Ok((rest, FillBlockKind::Keep)),
             "hollow" => Ok((rest, FillBlockKind::Hollow)),
             "outline" => Ok((rest, FillBlockKind::Outline)),
+            _ => Err(value),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
+pub enum CloneFilterKind {
+    Replace,
+    Masked,
+}
+
+impl fmt::Display for CloneFilterKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CloneFilterKind::Replace => write!(f, "replace"),
+            CloneFilterKind::Masked => write!(f, "masked"),
+        }
+    }
+}
+
+impl CommandParse for CloneFilterKind {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        let (rest, word) = parse_str(value.trim_start());
+        match word {
+            "replace" => Ok((rest, CloneFilterKind::Replace)),
+            "masked" => Ok((rest, CloneFilterKind::Masked)),
             _ => Err(value),
         }
     }
