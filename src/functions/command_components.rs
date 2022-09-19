@@ -216,10 +216,15 @@ pub enum SNbt {
     String(SNbtString),
     List(SNbtList),
     Compound(SNbtCompound),
+
     Byte(i8),
     Short(i16),
     Integer(i32),
     Long(i64),
+
+    ByteArray(Vec<i8>),
+    IntArray(Vec<i32>),
+    LongArray(Vec<i64>),
 }
 
 impl fmt::Display for SNbt {
@@ -228,15 +233,65 @@ impl fmt::Display for SNbt {
             SNbt::String(s) => s.fmt(f),
             SNbt::List(s) => s.fmt(f),
             SNbt::Compound(s) => s.fmt(f),
+
             SNbt::Byte(s) => write!(f, "{}b", s),
             SNbt::Short(s) => write!(f, "{}s", s),
             SNbt::Integer(s) => s.fmt(f),
             SNbt::Long(s) => write!(f, "{}l", s),
+
+            SNbt::ByteArray(s) => fmt_nbt_array(s, 'B', "b", f),
+            SNbt::IntArray(s) => fmt_nbt_array(s, 'I', "", f),
+            SNbt::LongArray(s) => fmt_nbt_array(s, 'L', "l", f),
         }
     }
 }
 
-fn parse_integer_from_command<T>(s: &str, suffix: char) -> Result<(&str, T), &str>
+fn fmt_nbt_array<T: fmt::Display>(array: &[T], type_id: char, suffix: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "[{type_id}; ")?;
+    for (i, elem) in array.iter().enumerate() {
+        write!(f, "{elem}{suffix}")?;
+        if i + 1 < array.len() {
+            write!(f, ", ")?;
+        }
+    }
+    write!(f, "]")?;
+    Ok(())
+}
+
+fn parse_nbt_array<'a, T>(mut s: &'a str, type_id: char, suffix: &str) -> Result<(&'a str, Vec<T>), &'a str>
+    where T: std::str::FromStr,
+{
+    let old_s = s;
+
+    s = s.strip_prefix('[').ok_or(old_s)?;
+    s = s.strip_prefix(type_id).ok_or(old_s)?;
+    s = s.strip_prefix(';').ok_or(old_s)?.trim();
+
+    let mut values = Vec::new();
+
+    while let Ok((rest, value)) = parse_integer_from_command(s, suffix) {
+        values.push(value);
+        s = rest.trim();
+
+        if let Some(rest) = s.strip_prefix(',') {
+            s = rest.trim();
+        } else if s.starts_with(']') {
+            break;
+        } else {
+            return Err(old_s);
+        }
+    }
+
+    if let Some(rest) = s.strip_prefix(']') {
+        s = rest.trim();
+    } else {
+        return Err(old_s);
+    }
+
+    Ok((s, values))
+}
+
+fn parse_integer_from_command<'a, T>(s: &'a str, suffix: &str) -> Result<(&'a str, T), &'a str>
 where
     T: std::str::FromStr,
 {
@@ -256,26 +311,26 @@ where
 }
 
 fn parse_nbt_byte_from_command(s: &str) -> Result<(&str, i8), &str> {
-    if let Ok(result) = parse_integer_from_command(s, 'b') {
+    if let Ok(result) = parse_integer_from_command(s, "b") {
         Ok(result)
     } else {
-        parse_integer_from_command(s, 'B')
+        parse_integer_from_command(s, "B")
     }
 }
 
 fn parse_nbt_short_from_command(s: &str) -> Result<(&str, i16), &str> {
-    if let Ok(result) = parse_integer_from_command(s, 's') {
+    if let Ok(result) = parse_integer_from_command(s, "s") {
         Ok(result)
     } else {
-        parse_integer_from_command(s, 'S')
+        parse_integer_from_command(s, "S")
     }
 }
 
 fn parse_nbt_long_from_command(s: &str) -> Result<(&str, i64), &str> {
-    if let Ok(result) = parse_integer_from_command(s, 'l') {
+    if let Ok(result) = parse_integer_from_command(s, "l") {
         Ok(result)
     } else {
-        parse_integer_from_command(s, 'L')
+        parse_integer_from_command(s, "L")
     }
 }
 
@@ -292,6 +347,15 @@ impl CommandParse for SNbt {
             Ok((rest, v.into()))
         } else if let Ok((rest, v)) = i32::parse_from_command(value) {
             Ok((rest, v.into()))
+        } else if value.starts_with("[B") {
+            let (rest, array) = parse_nbt_array::<i8>(value, 'B', "b")?;
+            Ok((rest, array.into()))
+        } else if value.starts_with("[I") {
+            let (rest, array) = parse_nbt_array::<i32>(value, 'I', "")?;
+            Ok((rest, array.into()))
+        } else if value.starts_with("[L") {
+            let (rest, array) = parse_nbt_array::<i64>(value, 'L', "l")?;
+            Ok((rest, array.into()))
         } else if value.starts_with('[') {
             let (rest, list) = SNbtList::parse_from_command(value)?;
             Ok((rest, list.into()))
@@ -341,6 +405,24 @@ impl From<i32> for SNbt {
 impl From<i64> for SNbt {
     fn from(s: i64) -> Self {
         Self::Long(s)
+    }
+}
+
+impl From<Vec<i8>> for SNbt {
+    fn from(s: Vec<i8>) -> Self {
+        Self::ByteArray(s)
+    }
+}
+
+impl From<Vec<i32>> for SNbt {
+    fn from(s: Vec<i32>) -> Self {
+        Self::IntArray(s)
+    }
+}
+
+impl From<Vec<i64>> for SNbt {
+    fn from(s: Vec<i64>) -> Self {
+        Self::LongArray(s)
     }
 }
 
@@ -1555,6 +1637,13 @@ mod test {
         roundtrip_snbt("{tricky: \"{\"}");
         roundtrip_snbt("{trickytoo: \"}\"}");
         roundtrip_snbt("{x: {inner: 42}, y: [1, 2, 3], z: \"Hello, world!\"}");
+    }
+
+    #[test]        
+    fn test_snbt_array() {
+        roundtrip_snbt("[B; 1b, 2b, 3b]");
+        roundtrip_snbt("[I; 42, 17, 67]");
+        roundtrip_snbt("[L; 5l, 7l, 9l]");
     }
 
     #[track_caller]
