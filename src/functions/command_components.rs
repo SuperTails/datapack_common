@@ -1435,7 +1435,30 @@ impl CommandParse for Selector {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(into = "String", try_from = "&str")]
-pub struct Uuid([i32; 4]);
+pub struct Uuid(pub [i32; 4]);
+
+impl TryFrom<SNbt> for Uuid {
+    type Error = ();
+
+    fn try_from(nbt: SNbt) -> Result<Self, Self::Error> {
+        match &nbt {
+            SNbt::IntArray(array) => {
+                if let [p0, p1, p2, p3] = **array {
+                    Ok(Uuid([p0, p1, p2, p3]))
+                } else {
+                    Err(())
+                }
+            }
+            _ => Err(())
+        }
+    }
+}
+
+impl From<Uuid> for SNbt {
+    fn from(uuid: Uuid) -> Self {
+        SNbt::IntArray(uuid.0.into())
+    }
+}
 
 impl From<Uuid> for String {
     fn from(value: Uuid) -> Self {
@@ -1503,7 +1526,6 @@ impl CommandParse for Uuid {
         Ok((rest, Uuid(parts)))
     }
 }
-
 
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
