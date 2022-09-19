@@ -3,7 +3,7 @@
 use std::{
     borrow::{Borrow, Cow},
     collections::BTreeMap,
-    convert::{AsRef, TryFrom},
+    convert::{AsRef, TryFrom, TryInto},
     fmt,
     rc::Rc,
 };
@@ -1433,6 +1433,78 @@ impl CommandParse for Selector {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(into = "String", try_from = "&str")]
+pub struct Uuid([i32; 4]);
+
+impl From<Uuid> for String {
+    fn from(value: Uuid) -> Self {
+        value.to_string()
+    }
+}
+
+impl TryFrom<&str> for Uuid {
+    type Error = String;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        parse_command(value).map_err(String::from)
+    }
+}
+
+impl fmt::Display for Uuid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let p0 = self.0[0] as u32;
+        let p1 = (self.0[1] as u32) >> 16;
+        let p2 = (self.0[1]) as u16;
+        let p3 = (self.0[2] as u32) >> 16;
+        let p4 = ((self.0[2] as u64 & 0xFFFF) << 32) | (self.0[3] as u32 as u64);
+        write!(f, "{:x}-{:x}-{:x}-{:x}-{:x}", p0, p1, p2, p3, p4)
+    }
+}
+
+impl CommandParse for Uuid {
+    fn parse_from_command(value: &str) -> Result<(&str, Self), &str> {
+        let end_idx = if let Some(idx) = value.find(|c: char| !c.is_ascii_hexdigit() && c != '-') {
+            idx
+        } else {
+            value.len()
+        };
+
+        let uuid = &value[..end_idx];
+        let rest = &value[end_idx..];
+
+        let parts = uuid.split('-')
+            .map(|part| u64::from_str_radix(part, 16))
+            .collect::<Result<Vec<u64>, _>>().map_err(|_| value)?;
+        let parts: [u64; 5] = parts.try_into().map_err(|_| value)?;
+
+        if parts[0] & !0xFFFF_FFFF != 0 {
+            return Err(value);
+        }
+        if parts[1] & !0xFFFF != 0 {
+            return Err(value);
+        }
+        if parts[2] & !0xFFFF != 0 {
+            return Err(value);
+        }
+        if parts[3] & !0xFFFF != 0 {
+            return Err(value);
+        }
+        if parts[4] & !0xFFFF_FFFF_FFFF != 0 {
+            return Err(value);
+        }
+
+        let parts = [
+            parts[0] as i32,
+            ((parts[1] << 16) | parts[2]) as i32,
+            ((parts[3] << 16) | (parts[4] >> 32)) as i32,
+            parts[4] as i32
+        ];
+
+        Ok((rest, Uuid(parts)))
+    }
+}
+
+
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -1440,6 +1512,7 @@ impl CommandParse for Selector {
 pub enum Target {
     Selector(Selector),
     Name(ScoreHolder),
+    Uuid(Uuid),
 }
 
 impl From<Target> for String {
@@ -1460,6 +1533,7 @@ impl fmt::Display for Target {
         match self {
             Target::Selector(selector) => write!(f, "{}", selector),
             Target::Name(name) => write!(f, "{}", name),
+            Target::Uuid(uuid) => write!(f, "{}", uuid),
         }
     }
 }
@@ -1470,6 +1544,8 @@ impl CommandParse for Target {
         if word.starts_with('@') {
             let (rest, selector) = Selector::parse_from_command(value)?;
             Ok((rest.trim_start(), Target::Selector(selector)))
+        } else if let Ok((rest, uuid)) = Uuid::parse_from_command(value) {
+            Ok((rest, Target::Uuid(uuid)))
         } else {
             let (rest, holder) = ScoreHolder::parse_from_command(value)?;
             Ok((rest.trim_start(), Target::Name(holder)))
@@ -1547,7 +1623,7 @@ mod test {
 
     use crate::functions::command_components::Selector;
 
-    use super::{BlockState, Coord, NbtPath, SNbt, ScoreOpKind};
+    use super::{BlockState, Coord, NbtPath, SNbt, ScoreOpKind, Uuid};
 
     #[test]
     fn test_coord() {
@@ -1644,6 +1720,13 @@ mod test {
         roundtrip_snbt("[B; 1b, 2b, 3b]");
         roundtrip_snbt("[I; 42, 17, 67]");
         roundtrip_snbt("[L; 5l, 7l, 9l]");
+    }
+
+    #[test]
+    fn test_uuid() {
+        let uuid_str = "95a1fa93-7c11-42cd-b79a-fdbba4b1da8d";
+        let uuid = parse_command::<Uuid>(uuid_str).unwrap();
+        assert_eq!(uuid_str, uuid.to_string());
     }
 
     #[track_caller]
