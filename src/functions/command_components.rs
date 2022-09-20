@@ -1433,7 +1433,7 @@ impl CommandParse for Selector {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(into = "String", try_from = "&str")]
 pub struct Uuid(pub [i32; 4]);
 
