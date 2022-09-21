@@ -13,6 +13,8 @@ use itertools::Itertools;
 
 pub use super::raw_text::JsonText;
 
+pub use ordered_float::NotNan;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockId(String);
 
@@ -222,6 +224,9 @@ pub enum SNbt {
     Integer(i32),
     Long(i64),
 
+    Float(NotNan<f32>),
+    Double(NotNan<f64>),
+
     ByteArray(Vec<i8>),
     IntArray(Vec<i32>),
     LongArray(Vec<i64>),
@@ -238,6 +243,9 @@ impl fmt::Display for SNbt {
             SNbt::Short(s) => write!(f, "{}s", s),
             SNbt::Integer(s) => s.fmt(f),
             SNbt::Long(s) => write!(f, "{}l", s),
+            SNbt::Float(s) => write!(f, "{}f", s),
+            SNbt::Double(s) => write!(f, "{}d", s),
+
 
             SNbt::ByteArray(s) => fmt_nbt_array(s, 'B', "b", f),
             SNbt::IntArray(s) => fmt_nbt_array(s, 'I', "", f),
@@ -258,8 +266,10 @@ fn fmt_nbt_array<T: fmt::Display>(array: &[T], type_id: char, suffix: &str, f: &
     Ok(())
 }
 
-fn parse_nbt_array<'a, T>(mut s: &'a str, type_id: char, suffix: &str) -> Result<(&'a str, Vec<T>), &'a str>
-    where T: std::str::FromStr,
+fn parse_nbt_array<T, F>(mut s: &str, type_id: char, mut unwrapper: F) -> Result<(&str, Vec<T>), &str>
+    where
+        T: std::str::FromStr,
+        F: FnMut(SNbt) -> Option<T>,
 {
     let old_s = s;
 
@@ -269,7 +279,8 @@ fn parse_nbt_array<'a, T>(mut s: &'a str, type_id: char, suffix: &str) -> Result
 
     let mut values = Vec::new();
 
-    while let Ok((rest, value)) = parse_integer_from_command(s, suffix) {
+    while let Ok((rest, value)) = parse_number_from_command(s) {
+        let value = unwrapper(value).unwrap();
         values.push(value);
         s = rest.trim();
 
@@ -291,47 +302,63 @@ fn parse_nbt_array<'a, T>(mut s: &'a str, type_id: char, suffix: &str) -> Result
     Ok((s, values))
 }
 
-fn parse_integer_from_command<'a, T>(s: &'a str, suffix: &str) -> Result<(&'a str, T), &'a str>
-where
-    T: std::str::FromStr,
-{
+enum Number {
+    Integer(i64),
+    Float(f64),
+}
+
+fn parse_suffixed_number(s: &str) -> Result<(&str, Number, Option<char>), &str> {
+    let valid_chars = |c: char| !c.is_ascii_digit() && c != 'e' && c != 'E' && c != '.';
+
     let end_idx = if let Some(value_neg) = s.strip_prefix('-') {
         value_neg
-            .find(|c: char| !c.is_ascii_digit())
+            .find(valid_chars)
             .unwrap_or(value_neg.len())
             + 1
     } else {
-        s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len())
+        s.find(valid_chars).unwrap_or(s.len())
     };
 
-    let (value_str, rest) = s.split_at(end_idx);
-    let value = value_str.parse().map_err(|_| s)?;
-    let rest = rest.strip_prefix(suffix).ok_or(s)?;
-    Ok((rest, value))
-}
+    let (value_str, mut rest) = s.split_at(end_idx);
 
-fn parse_nbt_byte_from_command(s: &str) -> Result<(&str, i8), &str> {
-    if let Ok(result) = parse_integer_from_command(s, "b") {
-        Ok(result)
+    let suffix = if rest.starts_with(|c: char| c.is_ascii_alphabetic()) {
+        let suffix = rest.chars().next().unwrap();
+        rest = &rest[1..];
+        Some(suffix)
     } else {
-        parse_integer_from_command(s, "B")
+        None
+    };
+
+    if value_str.contains('.') || value_str.contains('e') || value_str.contains('E') {
+        let value = Number::Float(value_str.parse::<f64>().map_err(|_| s)?);
+        Ok((rest, value, suffix))
+    } else {
+        let value = Number::Integer(value_str.parse::<i64>().map_err(|_| s)?);
+        Ok((rest, value, suffix))
     }
 }
 
-fn parse_nbt_short_from_command(s: &str) -> Result<(&str, i16), &str> {
-    if let Ok(result) = parse_integer_from_command(s, "s") {
-        Ok(result)
-    } else {
-        parse_integer_from_command(s, "S")
-    }
-}
+// FIXME: `1e10` actually parses as a string,
+// but this successfully parses it as a double instead.
+fn parse_number_from_command(s: &str) -> Result<(&str, SNbt), &str> {
+    let (rest, number, suffix) = parse_suffixed_number(s)?;
 
-fn parse_nbt_long_from_command(s: &str) -> Result<(&str, i64), &str> {
-    if let Ok(result) = parse_integer_from_command(s, "l") {
-        Ok(result)
-    } else {
-        parse_integer_from_command(s, "L")
-    }
+    let nbt = match (number, suffix) {
+        (Number::Float(num), None | Some('d') | Some('D')) => SNbt::Double(NotNan::new(num).unwrap()),
+        (Number::Float(num), Some('f') | Some('F')) => SNbt::Float(NotNan::new(num as f32).unwrap()),
+
+        (Number::Integer(num), Some('d') | Some('D')) => SNbt::Double(NotNan::new(num as f64).unwrap()),
+        (Number::Integer(num), Some('f') | Some('F')) => SNbt::Float(NotNan::new(num as f32).unwrap()),
+
+        (Number::Integer(num), Some('l') | Some('L')) => SNbt::Long(num),
+        (Number::Integer(num), None) => SNbt::Integer(i32::try_from(num).map_err(|_| s)?),
+        (Number::Integer(num), Some('s') | Some('S')) => SNbt::Short(i16::try_from(num).map_err(|_| s)?),
+        (Number::Integer(num), Some('b') | Some('B')) => SNbt::Byte(i8::try_from(num).map_err(|_| s)?),
+
+        (_, _) => return Err(s),
+    };
+
+    Ok((rest, nbt))
 }
 
 impl CommandParse for SNbt {
@@ -339,22 +366,19 @@ impl CommandParse for SNbt {
         if value.starts_with('{') {
             let (rest, compound) = SNbtCompound::parse_from_command(value)?;
             Ok((rest, compound.into()))
-        } else if let Ok((rest, v)) = parse_nbt_byte_from_command(value) {
-            Ok((rest, v.into()))
-        } else if let Ok((rest, v)) = parse_nbt_short_from_command(value) {
-            Ok((rest, v.into()))
-        } else if let Ok((rest, v)) = parse_nbt_long_from_command(value) {
-            Ok((rest, v.into()))
-        } else if let Ok((rest, v)) = i32::parse_from_command(value) {
-            Ok((rest, v.into()))
+        } else if let Ok((rest, v)) = parse_number_from_command(value) {
+            Ok((rest, v))
         } else if value.starts_with("[B") {
-            let (rest, array) = parse_nbt_array::<i8>(value, 'B', "b")?;
+            let unwrapper = |nbt: SNbt| if let SNbt::Byte(b) = nbt { Some(b) } else { None };
+            let (rest, array) = parse_nbt_array(value, 'B', unwrapper)?;
             Ok((rest, array.into()))
         } else if value.starts_with("[I") {
-            let (rest, array) = parse_nbt_array::<i32>(value, 'I', "")?;
+            let unwrapper = |nbt: SNbt| if let SNbt::Integer(i) = nbt { Some(i) } else { None };
+            let (rest, array) = parse_nbt_array(value, 'I', unwrapper)?;
             Ok((rest, array.into()))
         } else if value.starts_with("[L") {
-            let (rest, array) = parse_nbt_array::<i64>(value, 'L', "l")?;
+            let unwrapper = |nbt: SNbt| if let SNbt::Long(l) = nbt { Some(l) } else { None };
+            let (rest, array) = parse_nbt_array(value, 'L', unwrapper)?;
             Ok((rest, array.into()))
         } else if value.starts_with('[') {
             let (rest, list) = SNbtList::parse_from_command(value)?;
@@ -1688,6 +1712,13 @@ mod test {
     }
 
     #[track_caller]
+    fn compare_snbt(input: &str, output: &str) {
+        let snbt = parse_command::<SNbt>(input).unwrap();
+        let out = snbt.to_string();
+        assert_eq!(out, output);
+    }
+
+    #[track_caller]
     fn roundtrip_snbt(input: &str) {
         let snbt = parse_command::<SNbt>(input).unwrap();
         let output = snbt.to_string();
@@ -1704,6 +1735,19 @@ mod test {
         roundtrip_snbt("32767s");
         roundtrip_snbt("-32768s");
         roundtrip_snbt("12339543845939439l");
+    }
+
+    #[test]
+    fn test_snbt_float() {
+        roundtrip_snbt("3f");
+        roundtrip_snbt("4d");
+
+        compare_snbt("5.0f", "5f");
+        compare_snbt("6.0d", "6d");
+
+        compare_snbt("7.8", "7.8d");
+
+        compare_snbt("9.0e5", "900000d");
     }
 
     #[test]
