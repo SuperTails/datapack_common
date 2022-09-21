@@ -1493,7 +1493,7 @@ impl CommandParse for Uuid {
         };
 
         let uuid = &value[..end_idx];
-        let rest = &value[end_idx..];
+        let rest = &value[end_idx..].trim();
 
         let parts = uuid.split('-')
             .map(|part| u64::from_str_radix(part, 16))

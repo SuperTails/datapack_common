@@ -495,6 +495,8 @@ mod test {
         roundtrip_command("execute if block ~ ~ ~ minecraft:air run kill @a");
 
         roundtrip_command("execute if data storage test:foo bar.baz run kill @a");
+
+        roundtrip_command("execute as a-b-c-d-e at @s run kill @a");
     }
 
     #[test]
