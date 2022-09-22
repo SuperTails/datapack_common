@@ -232,6 +232,24 @@ pub enum SNbt {
     LongArray(Vec<i64>),
 }
 
+impl SNbt {
+    pub fn to_float(&self) -> Option<NotNan<f32>> {
+        if let SNbt::Float(f) = self {
+            Some(*f)
+        } else {
+            None
+        }
+    }
+
+    pub fn to_double(&self) -> Option<NotNan<f64>> {
+        if let SNbt::Double(d) = self {
+            Some(*d)
+        } else {
+            None
+        }
+    }
+}
+
 impl fmt::Display for SNbt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -329,6 +347,12 @@ fn parse_suffixed_number(s: &str) -> Result<(&str, Number, Option<char>), &str> 
         None
     };
 
+    if value_str.contains('e') && !value_str.contains('.') && suffix.is_none() {
+        // Minecraft parses numbers of the form `123e456` as a string.
+        // However, `123e456d` does parse as a float.
+        return Err(s)
+    }
+
     if value_str.contains('.') || value_str.contains('e') || value_str.contains('E') {
         let value = Number::Float(value_str.parse::<f64>().map_err(|_| s)?);
         Ok((rest, value, suffix))
@@ -338,8 +362,6 @@ fn parse_suffixed_number(s: &str) -> Result<(&str, Number, Option<char>), &str> 
     }
 }
 
-// FIXME: `1e10` actually parses as a string,
-// but this successfully parses it as a double instead.
 fn parse_number_from_command(s: &str) -> Result<(&str, SNbt), &str> {
     let (rest, number, suffix) = parse_suffixed_number(s)?;
 
@@ -1748,6 +1770,10 @@ mod test {
         compare_snbt("7.8", "7.8d");
 
         compare_snbt("9.0e5", "900000d");
+
+        // Minecraft parsing quirk
+        compare_snbt("1e10", "\"1e10\"");
+        compare_snbt("1e5d", "100000d");
     }
 
     #[test]
