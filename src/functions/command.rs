@@ -36,11 +36,10 @@ where
     T: CommandParse,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for value in self.0.iter().with_position() {
-            if let Position::Last(value) | Position::Only(value) = value {
+        for (position, value) in self.0.iter().with_position() {
+            if matches!(position, Position::Last | Position::Only) {
                 write!(f, "{}", value)?;
             } else {
-                let value = value.into_inner();
                 write!(f, "{} ", value)?;
             }
         }
